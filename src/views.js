@@ -59,7 +59,12 @@ ${refresh ? `<meta http-equiv="refresh" content="${refresh}">` : ''}
 const botTag = (isBot) =>
   isBot ? '<span class="tag bot">BOT</span>' : '<span class="tag human">HUMAN</span>';
 
-export function renderIndex({ ua, parsed, headers, ipHashShown, trapLinks, baseUrl }) {
+// Canonical public name — shown in every footer regardless of the BASE_URL the
+// container happens to run with (LAN IP during testing, etc.).
+const SITE = 'useragents.nichtregistriert.de';
+const SITE_LINK = `<a href="https://${SITE}">${SITE}</a>`;
+
+export function renderIndex({ ua, parsed, headers, ipHashShown, trapLinks }) {
   const rows = [
     ['Classification', botTag(parsed.isBot) + (parsed.botName ? ` <span class="muted">${esc(parsed.botName)}</span>` : '')],
     ['Browser', esc(parsed.browser) + (parsed.browserVersion ? ` ${esc(parsed.browserVersion)}` : '')],
@@ -105,7 +110,7 @@ export function renderIndex({ ua, parsed, headers, ipHashShown, trapLinks, baseU
 </div>
 
 <footer>
-  ${esc(baseUrl)} &middot; open crawler observatory &middot;
+  ${SITE_LINK} &middot; open crawler observatory &middot;
   <a href="/robots.txt">robots.txt</a> &middot; <a href="/sitemap.xml">sitemap.xml</a>
 </footer>
 
@@ -115,7 +120,7 @@ export function renderIndex({ ua, parsed, headers, ipHashShown, trapLinks, baseU
   return layout('useragents.nichtregistriert.de — your User-Agent, logged', body);
 }
 
-export function renderTrap({ depth, links, baseUrl }) {
+export function renderTrap({ depth, links }) {
   const body = `
 <header><h1>index node ${depth}</h1><p class="muted">automatically generated catalogue page</p></header>
 <div class="panel">
@@ -126,7 +131,7 @@ export function renderTrap({ depth, links, baseUrl }) {
   </ul>
   <p class="muted"><a href="/">return to root</a></p>
 </div>
-<footer>${esc(baseUrl)} &middot; every hit here is recorded as a crawler visit</footer>`;
+<footer>${SITE_LINK} &middot; every hit here is recorded as a crawler visit</footer>`;
   return layout(`index node ${depth}`, body);
 }
 
@@ -148,7 +153,7 @@ function barList(items, opts = {}) {
     .join('')}</tbody></table>`;
 }
 
-export function renderStats(s, { baseUrl }) {
+export function renderStats(s) {
   const t = s.totals;
   const humanVisits = t.visits - t.bot_visits;
   const pct = t.visits ? ((t.bot_visits / t.visits) * 100).toFixed(1) : '0.0';
@@ -251,15 +256,15 @@ export function renderStats(s, { baseUrl }) {
   </table>
 </div>
 
-<footer>${esc(baseUrl)} &middot; data collected since first request</footer>`;
+<footer>${SITE_LINK} &middot; data collected since first request</footer>`;
   return layout('useragents.nichtregistriert.de — statistics', body, { refresh: 30 });
 }
 
-export function renderNotFound({ path, baseUrl }) {
+export function renderNotFound({ path }) {
   const body = `
 <header><h1>404</h1><p class="muted">no such resource: ${esc(path)}</p></header>
 <p>This request was still logged. <a href="/">go to the homepage</a> or see the
 <a href="/stats">statistics</a>.</p>
-<footer>${esc(baseUrl)}</footer>`;
+<footer>${SITE_LINK}</footer>`;
   return layout('404', body);
 }

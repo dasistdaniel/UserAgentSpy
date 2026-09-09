@@ -1,7 +1,8 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 
-import { initDb, getSalt, recordVisit, getStats, closeDb } from './db.js';
+import { initDb, getSalt, getMeta, setMeta, recordVisit, getStats, closeDb } from './db.js';
+import { indexNowKey, maybePingIndexNow } from './indexnow.js';
 import { parseUA } from './ua.js';
 import {
   renderIndex,
@@ -16,6 +17,10 @@ const HOST = process.env.HOST || '0.0.0.0';
 const DB_PATH = process.env.DB_PATH || './data/app.db';
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:' + PORT).replace(/\/$/, '');
 const TRUST_PROXY = /^(1|true|yes|on)$/i.test(process.env.TRUST_PROXY || '');
+
+// Public URLs we advertise in sitemap.xml and push to IndexNow.
+const SITE_PATHS = ['/', '/stats'];
+const INDEXNOW_KEY = indexNowKey();
 
 initDb(DB_PATH);
 const SALT = getSalt();
@@ -92,12 +97,11 @@ const server = http.createServer((req, res) => {
       headers: req.headers,
       ipHashShown: ipHash(clientIp(req)),
       trapLinks: seedTrapLinks(),
-      baseUrl: BASE_URL,
     });
     send(res, 200, bodyOut);
     handled = true;
   } else if (pathname === '/stats') {
-    bodyOut = renderStats(getStats(), { baseUrl: BASE_URL });
+    bodyOut = renderStats(getStats());
     send(res, 200, bodyOut);
     handled = true;
   } else if (pathname === '/api/stats') {
@@ -121,8 +125,11 @@ const server = http.createServer((req, res) => {
     );
     handled = true;
   } else if (pathname === '/sitemap.xml') {
-    const urls = ['/', '/stats'].map(
-      (p) => `  <url><loc>${BASE_URL}${p}</loc><changefreq>daily</changefreq></url>`,
+    const lastmod = new Date().toISOString().slice(0, 10);
+    const urls = SITE_PATHS.map(
+      (p) =>
+        `  <url><loc>${BASE_URL}${p}</loc><lastmod>${lastmod}</lastmod>` +
+        `<changefreq>daily</changefreq><priority>${p === '/' ? '1.0' : '0.8'}</priority></url>`,
     );
     send(
       res,
@@ -131,6 +138,10 @@ const server = http.createServer((req, res) => {
       'application/xml; charset=utf-8',
     );
     handled = true;
+  } else if (INDEXNOW_KEY && pathname === `/${INDEXNOW_KEY}.txt`) {
+    // IndexNow ownership-verification file.
+    send(res, 200, INDEXNOW_KEY, 'text/plain; charset=utf-8');
+    handled = true;
   } else if (pathname.startsWith('/trap/')) {
     const trap = parseTrapPath(pathname);
     if (trap) {
@@ -138,7 +149,6 @@ const server = http.createServer((req, res) => {
       bodyOut = renderTrap({
         depth: trap.depth,
         links: nextTrapLinks(trap.token, trap.depth),
-        baseUrl: BASE_URL,
       });
       send(res, 200, bodyOut);
       handled = true;
@@ -147,7 +157,7 @@ const server = http.createServer((req, res) => {
 
   if (!handled) {
     status = 404;
-    bodyOut = renderNotFound({ path: pathname, baseUrl: BASE_URL });
+    bodyOut = renderNotFound({ path: pathname });
     send(res, 404, bodyOut);
   }
 
@@ -177,6 +187,15 @@ server.listen(PORT, HOST, () => {
   process.stdout.write(
     `useragents.nichtregistriert.de listening on http://${HOST}:${PORT}  (base: ${BASE_URL}, proxy-trust: ${TRUST_PROXY})\n`,
   );
+
+  maybePingIndexNow({
+    baseUrl: BASE_URL,
+    urls: SITE_PATHS.map((p) => BASE_URL + p),
+    getMeta,
+    setMeta,
+  })
+    .then((r) => process.stdout.write(`indexnow: ${JSON.stringify(r)}\n`))
+    .catch((err) => process.stderr.write(`indexnow failed: ${err.stack || err}\n`));
 });
 
 for (const sig of ['SIGTERM', 'SIGINT']) {

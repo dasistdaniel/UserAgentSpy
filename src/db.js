@@ -70,6 +70,17 @@ export function getSalt() {
   return db.prepare('SELECT value FROM meta WHERE key = ?').get('salt').value;
 }
 
+export function getMeta(key) {
+  return db.prepare('SELECT value FROM meta WHERE key = ?').get(key)?.value ?? null;
+}
+
+export function setMeta(key, value) {
+  db.prepare(
+    `INSERT INTO meta (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+  ).run(key, String(value));
+}
+
 const uaHashOf = (ua) =>
   crypto.createHash('sha256').update(ua || '').digest('hex').slice(0, 32);
 

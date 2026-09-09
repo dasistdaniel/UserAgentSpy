@@ -32,6 +32,15 @@ database.
   Tools, and a few "what's my user agent" / free-tools link directories. Backlinks
   are what actually bring the long tail of crawlers.
 
+### IndexNow (Bing + Yandex push)
+
+Set `INDEXNOW_KEY` to a random hex string (`openssl rand -hex 16`). On startup —
+at most once per 24 h, and only when `BASE_URL` is `https://…` — the server POSTs
+`/` and `/stats` to `https://api.indexnow.org/indexnow`, and serves the ownership
+file at `https://useragents.nichtregistriert.de/<key>.txt`. The last-ping
+timestamp lives in the `meta` table, so container restarts don't re-spam.
+Leave the key empty to disable the feature entirely.
+
 ## Data & privacy
 
 - Stored per request: timestamp, raw UA string, path, method, status, referer,
@@ -53,7 +62,8 @@ npm run dev           # same, with --watch
 
 Env vars: `PORT` (7060), `HOST` (0.0.0.0), `DB_PATH` (./data/app.db),
 `BASE_URL` (http://localhost:PORT), `TRUST_PROXY` (false),
-`TRAP_SECRET` (changes the maze token space).
+`TRAP_SECRET` (changes the maze token space),
+`INDEXNOW_KEY` (empty — see below).
 
 ## Deploy with Docker
 
