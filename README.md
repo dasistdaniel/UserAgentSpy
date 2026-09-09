@@ -47,11 +47,11 @@ database.
 Requires **Node.js ≥ 22.5** (uses the built-in `node:sqlite` — no npm packages).
 
 ```bash
-npm start          # http://localhost:8080
-npm run dev        # same, with --watch
+PORT=7060 npm start   # http://localhost:7060
+npm run dev           # same, with --watch
 ```
 
-Env vars: `PORT` (8080), `HOST` (0.0.0.0), `DB_PATH` (./data/app.db),
+Env vars: `PORT` (7060), `HOST` (0.0.0.0), `DB_PATH` (./data/app.db),
 `BASE_URL` (http://localhost:PORT), `TRUST_PROXY` (false),
 `TRAP_SECRET` (changes the maze token space).
 
@@ -64,19 +64,29 @@ git clone <this-repo> useragents-spy && cd useragents-spy
 docker compose up -d --build
 ```
 
-The container listens on `127.0.0.1:8080` and stores the SQLite DB in the named
-volume `uaspy-data` (`/data/app.db`). `TRUST_PROXY=true` and
-`BASE_URL=https://useragents.nichtregistriert.de` are set in `docker-compose.yml`.
+The container listens on port `7060` and stores the SQLite DB in the named
+volume `uaspy-data` (`/data/app.db`).
+
+`docker-compose.yml` currently ships a **direct-test** configuration: port
+`7060` on all interfaces, `TRUST_PROXY=false`,
+`BASE_URL=http://192.168.178.20:7060`. Test with
+`curl http://<host>:7060/` and open `/stats` in a browser.
+
+When the domain goes live, edit `docker-compose.yml`:
+
+- `ports:` → `"127.0.0.1:7060:7060"`
+- `TRUST_PROXY` → `"true"`
+- `BASE_URL` → `https://useragents.nichtregistriert.de`
 
 ### Reverse proxy
 
-Point `useragents.nichtregistriert.de` at `127.0.0.1:8080` and terminate TLS there.
+Point `useragents.nichtregistriert.de` at `127.0.0.1:7060` and terminate TLS there.
 
 **Caddy** (`/etc/caddy/Caddyfile`):
 
 ```
 useragents.nichtregistriert.de {
-    reverse_proxy 127.0.0.1:8080
+    reverse_proxy 127.0.0.1:7060
 }
 ```
 
@@ -89,7 +99,7 @@ server {
     # ssl_certificate ... (certbot)
 
     location / {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:7060;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -105,7 +115,7 @@ server {
       - traefik.enable=true
       - traefik.http.routers.uaspy.rule=Host(`useragents.nichtregistriert.de`)
       - traefik.http.routers.uaspy.tls.certresolver=le
-      - traefik.http.services.uaspy.loadbalancer.server.port=8080
+      - traefik.http.services.uaspy.loadbalancer.server.port=7060
 ```
 
 (Then drop the `ports:` mapping and put the container on the Traefik network.)
@@ -133,7 +143,7 @@ src/
   views.js     HTML rendering (inline CSS, dark theme)
   honeypot.js  bounded crawler-maze link generation
 Dockerfile          node:24-alpine, runs as non-root
-docker-compose.yml  localhost:8080, named volume for the DB
+docker-compose.yml  port 7060, named volume for the DB
 ```
 
 ## License
