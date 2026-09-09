@@ -1,0 +1,20 @@
+services:
+  app:
+    build: .
+    image: useragents-spy:latest
+    container_name: useragents-spy
+    restart: unless-stopped
+    environment:
+      PORT: "8080"
+      DB_PATH: /data/app.db
+      # The app sits behind a reverse proxy, so trust X-Forwarded-For / X-Real-IP.
+      TRUST_PROXY: "true"
+      BASE_URL: https://useragents.nichtregistriert.de
+    volumes:
+      - uaspy-data:/data
+    ports:
+      # Only expose to localhost; the reverse proxy on the host terminates TLS.
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  uaspy-data:

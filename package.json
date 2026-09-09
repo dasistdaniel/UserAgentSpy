@@ -1,0 +1,15 @@
+{
+  "name": "useragents-spy",
+  "version": "1.0.0",
+  "description": "Captures, stores and visualises the User-Agent of every visitor (humans and bots).",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch src/server.js"
+  },
+  "license": "MIT"
+}
