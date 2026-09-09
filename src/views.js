@@ -72,7 +72,7 @@ export function renderIndex({ ua, parsed, headers, ipHashShown, trapLinks, baseU
 
   const body = `
 <header>
-  <h1>useragents.spy</h1>
+  <h1>useragents.nichtregistriert.de</h1>
   <p>Your browser just told this server exactly what it is. It has been logged.</p>
 </header>
 <nav>
@@ -112,7 +112,7 @@ export function renderIndex({ ua, parsed, headers, ipHashShown, trapLinks, baseU
 <div class="hp" aria-hidden="true">
   ${trapLinks.map((h, i) => `<a href="${esc(h)}" rel="nofollow">catalogue entry ${i + 1}</a>`).join('')}
 </div>`;
-  return layout('useragents.spy — your User-Agent, logged', body);
+  return layout('useragents.nichtregistriert.de — your User-Agent, logged', body);
 }
 
 export function renderTrap({ depth, links, baseUrl }) {
@@ -252,7 +252,7 @@ export function renderStats(s, { baseUrl }) {
 </div>
 
 <footer>${esc(baseUrl)} &middot; data collected since first request</footer>`;
-  return layout('useragents.spy — statistics', body, { refresh: 30 });
+  return layout('useragents.nichtregistriert.de — statistics', body, { refresh: 30 });
 }
 
 export function renderNotFound({ path, baseUrl }) {

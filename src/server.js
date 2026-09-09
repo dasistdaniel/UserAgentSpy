@@ -175,7 +175,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, HOST, () => {
   process.stdout.write(
-    `useragents.spy listening on http://${HOST}:${PORT}  (base: ${BASE_URL}, proxy-trust: ${TRUST_PROXY})\n`,
+    `useragents.nichtregistriert.de listening on http://${HOST}:${PORT}  (base: ${BASE_URL}, proxy-trust: ${TRUST_PROXY})\n`,
   );
 });
 
