@@ -109,6 +109,7 @@ const server = http.createServer((req, res) => {
     send(res, 200, 'ok', 'text/plain');
     handled = true;
   } else if (pathname === '/favicon.ico') {
+    status = 204;
     send(res, 204, '');
     handled = true;
   } else if (pathname === '/robots.txt') {
