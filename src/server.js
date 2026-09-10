@@ -1,7 +1,10 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 
-import { initDb, getSalt, getMeta, setMeta, recordVisit, getStats, closeDb } from './db.js';
+import {
+  initDb, getSalt, getMeta, setMeta, recordVisit, getStats,
+  pruneVisits, retentionDays, closeDb,
+} from './db.js';
 import { indexNowKey, maybePingIndexNow } from './indexnow.js';
 import { parseUA } from './ua.js';
 import {
@@ -210,7 +213,24 @@ server.listen(PORT, HOST, () => {
   })
     .then((r) => process.stdout.write(`indexnow: ${JSON.stringify(r)}\n`))
     .catch((err) => process.stderr.write(`indexnow failed: ${err.stack || err}\n`));
+
+  runPrune();
+  setInterval(runPrune, 24 * 60 * 60 * 1000).unref();
 });
+
+// Drop raw visit rows past the retention window; the user_agents catalogue stays.
+function runPrune() {
+  try {
+    const n = pruneVisits();
+    if (n === null) {
+      process.stdout.write('prune: disabled (VISITS_RETENTION_DAYS <= 0)\n');
+    } else if (n > 0) {
+      process.stdout.write(`prune: deleted ${n} visit rows older than ${retentionDays()}d\n`);
+    }
+  } catch (err) {
+    process.stderr.write(`prune failed: ${err.stack || err}\n`);
+  }
+}
 
 for (const sig of ['SIGTERM', 'SIGINT']) {
   process.on(sig, () => {

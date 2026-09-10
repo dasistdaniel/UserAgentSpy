@@ -5,6 +5,11 @@ import { mkdirSync } from 'node:fs';
 
 let db;
 
+// Raw per-request rows older than this are pruned daily (see pruneVisits).
+// The user_agents catalogue is aggregate and kept forever. 0 or negative
+// disables pruning. Override with VISITS_RETENTION_DAYS.
+const RETENTION_DAYS = Math.floor(Number(process.env.VISITS_RETENTION_DAYS ?? 90));
+
 export function initDb(path) {
   mkdirSync(dirname(path), { recursive: true });
   db = new DatabaseSync(path);
@@ -12,6 +17,7 @@ export function initDb(path) {
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous = NORMAL;
     PRAGMA busy_timeout = 5000;
+    PRAGMA auto_vacuum = INCREMENTAL;
 
     CREATE TABLE IF NOT EXISTS meta (
       key   TEXT PRIMARY KEY,
@@ -187,6 +193,26 @@ function computeStats(filter) {
       GROUP BY day ORDER BY day`),
   };
 }
+
+// Delete raw visit rows past the retention window, then hand the freed pages
+// back to the OS. Cheap enough to run on startup and once a day. Returns the
+// number of rows deleted, or null when pruning is disabled.
+export function pruneVisits() {
+  if (!Number.isFinite(RETENTION_DAYS) || RETENTION_DAYS <= 0) return null;
+
+  const deleted = db
+    .prepare(`DELETE FROM visits WHERE ts < datetime('now', ?)`)
+    .run(`-${RETENTION_DAYS} days`).changes;
+
+  if (deleted > 0) {
+    db.exec('PRAGMA incremental_vacuum');
+    db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    statsCache.clear();
+  }
+  return deleted;
+}
+
+export const retentionDays = () => (RETENTION_DAYS > 0 ? RETENTION_DAYS : 0);
 
 export function closeDb() {
   try {

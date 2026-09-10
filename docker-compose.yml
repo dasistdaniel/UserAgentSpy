@@ -19,6 +19,9 @@ services:
       # Google Search Console: token from the googleXXXX.html verification file
       # (.html suffix optional). Empty = route disabled.
       GOOGLE_VERIFY: ""
+      # Raw per-request rows older than this many days are pruned daily; the
+      # user_agents catalogue is kept forever. 0 = keep everything.
+      VISITS_RETENTION_DAYS: "90"
     volumes:
       - uaspy-data:/data
     ports:

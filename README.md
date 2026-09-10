@@ -58,6 +58,13 @@ After it verifies, submit `https://useragents.nichtregistriert.de/sitemap.xml`.
   per day without the address being recoverable. The salt is random per database
   (in the `meta` table).
 - No cookies, no JS trackers, no third-party requests.
+- **Retention:** raw per-request rows are pruned once a day (and on startup) once
+  they pass `VISITS_RETENTION_DAYS` (default 90); set it to `0` to keep everything.
+  The `user_agents` catalogue (one row per distinct UA, with first/last seen and
+  hit count) is kept forever, so long-term "who crawls us" data survives — only
+  the per-hit path/referer/timeline detail ages out. Freed pages are returned to
+  the OS via incremental vacuum; a full `VACUUM` on an existing DB is a one-time
+  manual step if you want the file itself to shrink immediately.
 
 ## Run locally
 
@@ -71,7 +78,8 @@ npm run dev           # same, with --watch
 Env vars: `PORT` (7060), `HOST` (0.0.0.0), `DB_PATH` (./data/app.db),
 `BASE_URL` (http://localhost:PORT), `TRUST_PROXY` (false),
 `TRAP_SECRET` (changes the maze token space),
-`INDEXNOW_KEY` (empty — see below), `GOOGLE_VERIFY` (empty — see below).
+`INDEXNOW_KEY` (empty — see below), `GOOGLE_VERIFY` (empty — see below),
+`VISITS_RETENTION_DAYS` (90 — see below).
 
 ## Deploy with Docker
 
