@@ -117,9 +117,15 @@ export function recordVisit(v) {
   }
 }
 
-export function getStats() {
+// filter: 'all' | 'bots' | 'humans' — narrows every per-visit / per-UA panel.
+// The totals block always stays global (it's the overview).
+export function getStats(filter = 'all') {
   const all = (sql, ...a) => db.prepare(sql).all(...a);
   const one = (sql, ...a) => db.prepare(sql).get(...a);
+
+  const bot = filter === 'bots' ? 1 : filter === 'humans' ? 0 : null;
+  const vWhere = bot === null ? '' : `WHERE is_bot = ${bot}`;
+  const vAnd = bot === null ? '' : `AND is_bot = ${bot}`;
 
   const totals = one(`
     SELECT
@@ -134,32 +140,33 @@ export function getStats() {
 
   return {
     generatedAt: new Date().toISOString(),
+    filter,
     totals,
     topUserAgents: all(`
       SELECT ua, hits, is_bot, bot_name, browser, os, device, last_seen
-      FROM user_agents ORDER BY hits DESC, last_seen DESC LIMIT 30`),
+      FROM user_agents ${vWhere} ORDER BY hits DESC, last_seen DESC LIMIT 30`),
     newestUserAgents: all(`
       SELECT ua, first_seen, is_bot, bot_name, browser, os
-      FROM user_agents ORDER BY first_seen DESC LIMIT 15`),
+      FROM user_agents ${vWhere} ORDER BY first_seen DESC LIMIT 15`),
     topBots: all(`
       SELECT COALESCE(NULLIF(bot_name,''), ua) AS name, COUNT(*) AS c
       FROM visits WHERE is_bot = 1
       GROUP BY name ORDER BY c DESC LIMIT 20`),
     browsers: all(`
       SELECT COALESCE(browser,'Unknown') AS name, COUNT(*) AS c
-      FROM visits GROUP BY name ORDER BY c DESC LIMIT 12`),
+      FROM visits ${vWhere} GROUP BY name ORDER BY c DESC LIMIT 12`),
     oses: all(`
       SELECT COALESCE(os,'Unknown') AS name, COUNT(*) AS c
-      FROM visits GROUP BY name ORDER BY c DESC LIMIT 12`),
+      FROM visits ${vWhere} GROUP BY name ORDER BY c DESC LIMIT 12`),
     devices: all(`
       SELECT COALESCE(device,'unknown') AS name, COUNT(*) AS c
-      FROM visits GROUP BY name ORDER BY c DESC`),
+      FROM visits ${vWhere} GROUP BY name ORDER BY c DESC`),
     topPaths: all(`
       SELECT path, COUNT(*) AS c, SUM(is_bot) AS bots
-      FROM visits GROUP BY path ORDER BY c DESC LIMIT 20`),
+      FROM visits ${vWhere} GROUP BY path ORDER BY c DESC LIMIT 20`),
     daily: all(`
       SELECT substr(ts,1,10) AS day, COUNT(*) AS c, SUM(is_bot) AS bots
-      FROM visits WHERE ts >= datetime('now','-30 day')
+      FROM visits WHERE ts >= datetime('now','-30 day') ${vAnd}
       GROUP BY day ORDER BY day`),
   };
 }

@@ -54,6 +54,9 @@ function clientIp(req) {
 
 const now = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
 
+// /stats + /api/stats accept ?filter=bots|humans (anything else => all).
+const statsFilter = (v) => (v === 'bots' || v === 'humans' ? v : 'all');
+
 // Paths we serve but do NOT want polluting the visit log.
 const SKIP_LOG = new Set(['/api/stats', '/healthz', '/favicon.ico']);
 
@@ -107,11 +110,12 @@ const server = http.createServer((req, res) => {
     send(res, 200, bodyOut);
     handled = true;
   } else if (pathname === '/stats') {
-    bodyOut = renderStats(getStats());
+    bodyOut = renderStats(getStats(statsFilter(url.searchParams.get('filter'))));
     send(res, 200, bodyOut);
     handled = true;
   } else if (pathname === '/api/stats') {
-    send(res, 200, JSON.stringify(getStats(), null, 2), 'application/json; charset=utf-8', {
+    const data = getStats(statsFilter(url.searchParams.get('filter')));
+    send(res, 200, JSON.stringify(data, null, 2), 'application/json; charset=utf-8', {
       'access-control-allow-origin': '*',
     });
     handled = true;

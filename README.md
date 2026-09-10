@@ -11,8 +11,8 @@ Target deployment: `https://useragents.nichtregistriert.de` (Docker on a VPS).
 | Route | Purpose |
 | --- | --- |
 | `GET /` | Shows your raw User-Agent + what the server parsed from it (browser, OS, device, bot?). Records the visit. |
-| `GET /stats` | Live dashboard: totals, bot vs human, top user-agents, browsers, OSes, devices, probed paths, 30-day timeline, newest UAs. Auto-refreshes every 30 s. |
-| `GET /api/stats` | Same data as JSON (CORS-open). |
+| `GET /stats` | Live dashboard: totals, bot vs human, top user-agents, browsers, OSes, devices, probed paths, 30-day timeline, newest UAs. Auto-refreshes every 30 s. `?filter=bots` / `?filter=humans` narrows every panel below the totals. |
+| `GET /api/stats` | Same data as JSON (CORS-open). Honors the same `?filter=`. |
 | `GET /robots.txt` | Allows everything, points crawlers at the sitemap. |
 | `GET /sitemap.xml` | Lists `/` and `/stats`. |
 | `GET /trap/<depth>/<token>` | Honeypot "crawler maze" — every page links to a few deeper ones (bounded at depth 8). Hits are logged with `source = honeypot`. |

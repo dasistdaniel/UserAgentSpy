@@ -38,6 +38,9 @@ tr:last-child td{border-bottom:0}
 .spark div{flex:1;min-width:2px;background:#1f6feb;position:relative}
 .spark div i{position:absolute;bottom:0;left:0;right:0;background:#ff7b72}
 .muted{color:#8b949e}
+.filters{display:flex;gap:10px;align-items:center;margin:-10px 0 22px;flex-wrap:wrap}
+.filters a{padding:2px 12px;border:1px solid #21262d;border-radius:999px;color:#8b949e}
+.filters a.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
 footer{margin-top:40px;color:#8b949e;font-size:12px}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 `;
@@ -157,6 +160,9 @@ export function renderStats(s) {
   const t = s.totals;
   const humanVisits = t.visits - t.bot_visits;
   const pct = t.visits ? ((t.bot_visits / t.visits) * 100).toFixed(1) : '0.0';
+  const f = s.filter || 'all';
+  const filterLink = (key, label, href) =>
+    `<a href="${href}"${f === key ? ' class="on"' : ''}>${label}</a>`;
 
   const maxDay = Math.max(1, ...s.daily.map((d) => d.c));
   const spark = s.daily
@@ -173,9 +179,19 @@ export function renderStats(s) {
   const body = `
 <header>
   <h1>statistics</h1>
-  <p class="muted">generated ${esc(s.generatedAt)} · auto-refresh 30s</p>
+  <p class="muted">generated ${esc(s.generatedAt)} · auto-refresh 30s${
+    f === 'all' ? '' : ` · showing <strong>${f}</strong> only`
+  }</p>
 </header>
-<nav><a href="/">&larr; home</a><a href="/api/stats">json</a></nav>
+<nav><a href="/">&larr; home</a><a href="/api/stats${
+  f === 'all' ? '' : '?filter=' + f
+}">json</a></nav>
+<div class="filters">
+  <span class="muted">filter:</span>
+  ${filterLink('all', 'all', '/stats')}
+  ${filterLink('humans', 'humans', '/stats?filter=humans')}
+  ${filterLink('bots', 'bots', '/stats?filter=bots')}
+</div>
 
 <div class="cards">
   <div class="card"><div class="n">${t.visits.toLocaleString('en')}</div><div class="l">total requests</div></div>
@@ -189,7 +205,7 @@ export function renderStats(s) {
 </div>
 
 <div class="panel">
-  <h2>requests per day (last 30d, red = bots)</h2>
+  <h2>requests per day (last 30d${f === 'all' ? ', red = bots' : ''})</h2>
   ${s.daily.length ? `<div class="spark">${spark}</div>` : '<p class="muted">no data yet</p>'}
 </div>
 
@@ -213,10 +229,14 @@ export function renderStats(s) {
   </table>
 </div>
 
-<div class="panel">
+${
+  f === 'humans'
+    ? ''
+    : `<div class="panel">
   <h2>top bots &amp; libraries</h2>
   ${s.topBots.length ? barList(s.topBots) : '<p class="muted">none yet</p>'}
-</div>
+</div>`
+}
 
 <div class="panel">
   <h2>browsers</h2>
