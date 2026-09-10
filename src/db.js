@@ -117,9 +117,26 @@ export function recordVisit(v) {
   }
 }
 
+// Short-lived cache: /stats auto-refreshes every 30 s and scrapers hammer
+// /api/stats, so without this each hit would run ~10 aggregate queries. A few
+// seconds of staleness on a dashboard is fine; TTL wins over write-invalidation
+// because under a bot flood we specifically want the cache to hold.
+const STATS_TTL_MS = 8000;
+const statsCache = new Map(); // filter -> { at, data }
+
 // filter: 'all' | 'bots' | 'humans' — narrows every per-visit / per-UA panel.
 // The totals block always stays global (it's the overview).
 export function getStats(filter = 'all') {
+  const key = filter === 'bots' || filter === 'humans' ? filter : 'all';
+  const hit = statsCache.get(key);
+  if (hit && Date.now() - hit.at < STATS_TTL_MS) return hit.data;
+
+  const data = computeStats(key);
+  statsCache.set(key, { at: Date.now(), data });
+  return data;
+}
+
+function computeStats(filter) {
   const all = (sql, ...a) => db.prepare(sql).all(...a);
   const one = (sql, ...a) => db.prepare(sql).get(...a);
 
