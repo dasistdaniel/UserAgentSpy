@@ -231,6 +231,13 @@ function computeStats(filter) {
     topPaths: all(`
       SELECT path, COUNT(*) AS c, SUM(is_bot) AS bots
       FROM visits ${vWhere} GROUP BY path ORDER BY c DESC LIMIT 20`),
+    statusCodes: all(`
+      SELECT status, COUNT(*) AS c, SUM(is_bot) AS bots
+      FROM visits ${vWhere} GROUP BY status ORDER BY c DESC`),
+    notFoundPaths: all(`
+      SELECT path, COUNT(*) AS c, SUM(is_bot) AS bots
+      FROM visits WHERE status = 404 ${vAnd}
+      GROUP BY path ORDER BY c DESC LIMIT 20`),
     daily: all(`
       SELECT substr(ts,1,10) AS day, COUNT(*) AS c, SUM(is_bot) AS bots
       FROM visits WHERE ts >= datetime('now','-30 day') ${vAnd}

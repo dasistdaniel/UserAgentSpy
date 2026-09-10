@@ -69,6 +69,14 @@ const botTag = (isBot) =>
 const SITE = 'useragents.nichtregistriert.de';
 const SITE_LINK = `<a href="https://${SITE}">${SITE}</a>`;
 
+const STATUS_TEXT = {
+  200: 'OK',
+  204: 'No Content',
+  400: 'Bad Request',
+  404: 'Not Found',
+  405: 'Method Not Allowed',
+};
+
 function fingerprintVerdict(parsed, fp) {
   if (!fp || !fp.claimsBrowser) {
     return '<span class="muted">n/a — not claiming a mainstream browser</span>';
@@ -333,6 +341,27 @@ ${
   <h2>most requested paths (probes included)</h2>
   ${barList(s.topPaths, { showBots: true })}
 </div>
+
+<div class="panel">
+  <h2>response status codes</h2>
+  ${barList(
+    (s.statusCodes || []).map((r) => ({
+      label: `${r.status} · ${STATUS_TEXT[r.status] || 'other'}`,
+      c: r.c,
+      bots: r.bots,
+    })),
+    { showBots: true },
+  )}
+</div>
+
+${
+  (s.notFoundPaths || []).length
+    ? `<div class="panel">
+  <h2>top 404s (what scanners probe for)</h2>
+  ${barList(s.notFoundPaths, { showBots: true })}
+</div>`
+    : ''
+}
 
 <div class="panel">
   <h2>newest user-agents seen</h2>
