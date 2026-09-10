@@ -54,6 +54,7 @@ function layout(title, body, { refresh = 0 } = {}) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 ${refresh ? `<meta http-equiv="refresh" content="${refresh}">` : ''}
+<link rel="alternate" type="application/atom+xml" title="newest user-agents" href="/feed.xml">
 <title>${esc(title)}</title>
 <style>${CSS}</style>
 </head>
@@ -157,6 +158,7 @@ export function renderIndex({ ua, parsed, fp, headers, ipHashShown, trapLinks })
 <footer>
   ${SITE_LINK} &middot; open crawler observatory &middot;
   <a href="/robots.txt">robots.txt</a> &middot; <a href="/sitemap.xml">sitemap.xml</a>
+  &middot; <a href="/feed.xml">feed</a>
 </footer>
 
 <div class="hp" aria-hidden="true">
@@ -381,7 +383,8 @@ ${
   </table>
 </div>
 
-<footer>${SITE_LINK} &middot; data collected since first request</footer>`;
+<footer>${SITE_LINK} &middot; data collected since first request &middot;
+  <a href="/feed.xml">feed</a> &middot; <a href="/api/stats">json</a></footer>`;
   return layout('useragents.nichtregistriert.de — statistics', body, { refresh: 30 });
 }
 

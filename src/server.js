@@ -3,11 +3,12 @@ import crypto from 'node:crypto';
 
 import {
   initDb, getSalt, getMeta, setMeta, recordVisit, getStats,
-  pruneVisits, retentionDays, closeDb,
+  recentUserAgents, pruneVisits, retentionDays, closeDb,
 } from './db.js';
 import { indexNowKey, maybePingIndexNow } from './indexnow.js';
 import { parseUA } from './ua.js';
 import { analyzeRequest } from './fingerprint.js';
+import { renderAtom } from './feed.js';
 import {
   renderIndex,
   renderStats,
@@ -152,6 +153,14 @@ const server = http.createServer((req, res) => {
       200,
       `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`,
       'application/xml; charset=utf-8',
+    );
+    handled = true;
+  } else if (pathname === '/feed.xml') {
+    send(
+      res,
+      200,
+      renderAtom({ baseUrl: BASE_URL, entries: recentUserAgents(50) }),
+      'application/atom+xml; charset=utf-8',
     );
     handled = true;
   } else if (INDEXNOW_KEY && pathname === `/${INDEXNOW_KEY}.txt`) {

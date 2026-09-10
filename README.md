@@ -13,6 +13,7 @@ Target deployment: `https://useragents.nichtregistriert.de` (Docker on a VPS).
 | `GET /` | Shows your raw User-Agent + what the server parsed from it (browser, OS, device, bot?) **plus a header fingerprint** — whether `Accept`, `Accept-Encoding`, `Sec-Fetch-*`, `Sec-CH-UA` and the HTTP version match the browser the UA claims to be. Records the visit. |
 | `GET /stats` | Live dashboard: totals, bot vs human, spoofed-browser hits, top user-agents, header-fingerprint mismatches, browsers, OSes, devices, probed paths, response status codes, top 404s, 30-day timeline, newest UAs. Auto-refreshes every 30 s. `?filter=bots` / `?filter=humans` narrows every panel below the totals. |
 | `GET /api/stats` | Same data as JSON (CORS-open). Honors the same `?filter=`. |
+| `GET /feed.xml` | Atom feed of the 50 newest distinct user-agents (one `<entry>` each). Advertised via `<link rel="alternate">` in every page head. |
 | `GET /robots.txt` | Allows everything, points crawlers at the sitemap. |
 | `GET /sitemap.xml` | Lists `/` and `/stats`. |
 | `GET /trap/<depth>/<token>` | Honeypot "crawler maze" — every page links to a few deeper ones (bounded at depth 8). Hits are logged with `source = honeypot`. |
@@ -193,6 +194,7 @@ docker run --rm -v uaspy-data:/data -v "$PWD":/backup alpine \
 src/
   server.js      HTTP server + routing + request logging
   db.js          node:sqlite schema, recordVisit(), getStats(), retention
+  feed.js        Atom feed of the newest user-agents
   ua.js          dependency-free User-Agent parser + bot detection
   fingerprint.js header-fingerprint analysis + spoof score
   views.js       HTML rendering (inline CSS, dark theme)

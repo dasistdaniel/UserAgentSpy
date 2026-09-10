@@ -144,6 +144,16 @@ export function recordVisit(v) {
   }
 }
 
+// Newest distinct user-agents, most-recently-first-seen first. Backs /feed.xml.
+export function recentUserAgents(limit = 50) {
+  return db
+    .prepare(
+      `SELECT ua_hash, ua, first_seen, last_seen, hits, is_bot, bot_name, browser, os, device
+       FROM user_agents ORDER BY first_seen DESC LIMIT ?`,
+    )
+    .all(Math.min(Math.max(1, limit | 0), 200));
+}
+
 // Short-lived cache: /stats auto-refreshes every 30 s and scrapers hammer
 // /api/stats, so without this each hit would run ~10 aggregate queries. A few
 // seconds of staleness on a dashboard is fine; TTL wins over write-invalidation
