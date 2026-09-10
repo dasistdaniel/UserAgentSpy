@@ -244,6 +244,11 @@ export function renderStats(s) {
   <div class="card"><div class="n">${humanVisits.toLocaleString('en')}</div><div class="l">human requests</div></div>
   <div class="card"><div class="n">${t.bot_uas.toLocaleString('en')}</div><div class="l">distinct bots</div></div>
   <div class="card"><div class="n">${t.honeypot_hits.toLocaleString('en')}</div><div class="l">honeypot hits</div></div>
+  ${
+    t.decoy_hits
+      ? `<div class="card"><div class="n">${t.decoy_hits.toLocaleString('en')}</div><div class="l">decoy endpoint hits</div></div>`
+      : ''
+  }
   <div class="card"><div class="n">${t.last24h.toLocaleString('en')}</div><div class="l">last 24 hours</div></div>
   <div class="card"><div class="n">${t.last7d.toLocaleString('en')}</div><div class="l">last 7 days</div></div>
   <div class="card"><div class="n">${(t.spoofed_visits || 0).toLocaleString('en')}</div><div class="l">spoofed-browser hits</div></div>
@@ -361,6 +366,15 @@ ${
     ? `<div class="panel">
   <h2>top 404s (what scanners probe for)</h2>
   ${barList(s.notFoundPaths, { showBots: true })}
+</div>`
+    : ''
+}
+
+${
+  (s.decoyPaths || []).length
+    ? `<div class="panel">
+  <h2>decoy endpoint hits (fake 200s for scanner probes)</h2>
+  ${barList(s.decoyPaths, { showBots: true })}
 </div>`
     : ''
 }

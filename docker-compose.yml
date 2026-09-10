@@ -22,6 +22,9 @@ services:
       # Raw per-request rows older than this many days are pruned daily; the
       # user_agents catalogue is kept forever. 0 = keep everything.
       VISITS_RETENTION_DAYS: "90"
+      # Fake 200s for scanner probes (/wp-login.php, /.env, …) instead of 404s.
+      # More aggressive than the default honeypot stance, so opt-in.
+      FAKE_ENDPOINTS: ""
     volumes:
       - uaspy-data:/data
     ports:

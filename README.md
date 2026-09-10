@@ -18,6 +18,7 @@ Target deployment: `https://useragents.nichtregistriert.de` (Docker on a VPS).
 | `GET /robots.txt` | Allows everything, points crawlers at the sitemap and `/llms.txt`. |
 | `GET /sitemap.xml` | Lists `/` and `/stats`. |
 | `GET /trap/<depth>/<token>` | Honeypot "crawler maze" — every page links to a few deeper ones (bounded at depth 8). Hits are logged with `source = honeypot`. |
+| `GET /wp-login.php`, `/.env`, … | **Only when `FAKE_ENDPOINTS` is on:** a fake `200` for common scanner probes instead of a `404`, logged with `source = decoy` (see below). |
 | anything else | Logged as a 404 (bot probes like `/wp-login.php` are valuable data). |
 
 Every request except `/api/stats`, `/healthz` and `/favicon.ico` is written to the
@@ -33,6 +34,19 @@ database.
 - After deploying, submit the domain to: Google Search Console, Bing Webmaster
   Tools, and a few "what's my user agent" / free-tools link directories. Backlinks
   are what actually bring the long tail of crawlers.
+
+### Decoy endpoints (`FAKE_ENDPOINTS`, off by default)
+
+Set `FAKE_ENDPOINTS=true` and a handful of classic vulnerability-scanner targets
+(`/wp-login.php`, `/wp-admin/`, `/xmlrpc.php`, `/.env`, `/.git/config`,
+`/phpinfo.php`, `/server-status`, `/config.json`) answer with a **plausible-looking
+but entirely fake `200`** instead of a `404`. Scanners often act in stages — a
+`404` ends the probe, a `200` reads as a hit and brings the bot back with its
+second-stage payloads, which is exactly the behaviour worth observing. The fake
+responses accept no input, have no working form, and contain only obvious junk;
+each hit is logged with `source = decoy` and shown on `/stats` in its own panel.
+This is deliberately more aggressive than the default "Standard + Honeypot" stance,
+hence opt-in. Decoys are defined in `src/decoys.js`.
 
 ### IndexNow (Bing + Yandex push)
 
@@ -109,7 +123,7 @@ Env vars: `PORT` (7060), `HOST` (0.0.0.0), `DB_PATH` (./data/app.db),
 `BASE_URL` (http://localhost:PORT), `TRUST_PROXY` (false),
 `TRAP_SECRET` (changes the maze token space),
 `INDEXNOW_KEY` (empty — see below), `GOOGLE_VERIFY` (empty — see below),
-`VISITS_RETENTION_DAYS` (90 — see below).
+`VISITS_RETENTION_DAYS` (90 — see below), `FAKE_ENDPOINTS` (off — see below).
 
 ## Deploy with Docker
 
@@ -196,6 +210,7 @@ src/
   server.js      HTTP server + routing + request logging
   db.js          node:sqlite schema, recordVisit(), getStats(), retention
   feed.js        Atom feed of the newest user-agents
+  decoys.js      fake 200s for scanner probes (opt-in via FAKE_ENDPOINTS)
   ua.js          dependency-free User-Agent parser + bot detection
   fingerprint.js header-fingerprint analysis + spoof score
   views.js       HTML rendering (inline CSS, dark theme)

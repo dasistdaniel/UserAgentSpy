@@ -188,6 +188,7 @@ function computeStats(filter) {
       (SELECT COUNT(*) FROM visits      WHERE is_bot = 1)             AS bot_visits,
       (SELECT COUNT(*) FROM user_agents WHERE is_bot = 1)             AS bot_uas,
       (SELECT COUNT(*) FROM visits WHERE source = 'honeypot')         AS honeypot_hits,
+      (SELECT COUNT(*) FROM visits WHERE source = 'decoy')            AS decoy_hits,
       (SELECT COUNT(*) FROM visits WHERE ts >= datetime('now','-1 day'))  AS last24h,
       (SELECT COUNT(*) FROM visits WHERE ts >= datetime('now','-7 day'))  AS last7d,
       (SELECT COUNT(*) FROM visits WHERE spoof_score >= ${SPOOF_THRESHOLD} AND is_bot = 0)
@@ -247,6 +248,10 @@ function computeStats(filter) {
     notFoundPaths: all(`
       SELECT path, COUNT(*) AS c, SUM(is_bot) AS bots
       FROM visits WHERE status = 404 ${vAnd}
+      GROUP BY path ORDER BY c DESC LIMIT 20`),
+    decoyPaths: all(`
+      SELECT path, COUNT(*) AS c, SUM(is_bot) AS bots
+      FROM visits WHERE source = 'decoy' ${vAnd}
       GROUP BY path ORDER BY c DESC LIMIT 20`),
     daily: all(`
       SELECT substr(ts,1,10) AS day, COUNT(*) AS c, SUM(is_bot) AS bots

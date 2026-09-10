@@ -16,12 +16,16 @@ import {
   renderNotFound,
 } from './views.js';
 import { seedTrapLinks, nextTrapLinks, parseTrapPath } from './honeypot.js';
+import { decoyFor } from './decoys.js';
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 const DB_PATH = process.env.DB_PATH || './data/app.db';
 const BASE_URL = (process.env.BASE_URL || 'http://localhost:' + PORT).replace(/\/$/, '');
 const TRUST_PROXY = /^(1|true|yes|on)$/i.test(process.env.TRUST_PROXY || '');
+// Serve fake 200s for common scanner probes (/wp-login.php, /.env, …) instead of
+// 404s, to draw out second-stage bot behaviour. Off unless explicitly enabled.
+const FAKE_ENDPOINTS = /^(1|true|yes|on)$/i.test(process.env.FAKE_ENDPOINTS || '');
 
 // Public URLs we advertise in sitemap.xml and push to IndexNow.
 const SITE_PATHS = ['/', '/stats'];
@@ -222,6 +226,13 @@ const server = http.createServer((req, res) => {
         links: nextTrapLinks(trap.token, trap.depth),
       });
       send(res, 200, bodyOut);
+      handled = true;
+    }
+  } else if (FAKE_ENDPOINTS) {
+    const decoy = decoyFor(pathname);
+    if (decoy) {
+      source = 'decoy';
+      send(res, 200, decoy.body, decoy.type);
       handled = true;
     }
   }
