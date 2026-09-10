@@ -158,7 +158,7 @@ export function renderIndex({ ua, parsed, fp, headers, ipHashShown, trapLinks })
 <footer>
   ${SITE_LINK} &middot; open crawler observatory &middot;
   <a href="/robots.txt">robots.txt</a> &middot; <a href="/sitemap.xml">sitemap.xml</a>
-  &middot; <a href="/feed.xml">feed</a>
+  &middot; <a href="/feed.xml">feed</a> &middot; <a href="/llms.txt">llms.txt</a>
 </footer>
 
 <div class="hp" aria-hidden="true">

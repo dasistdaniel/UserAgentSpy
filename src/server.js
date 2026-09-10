@@ -82,6 +82,44 @@ function log(req, status, pathname) {
   );
 }
 
+// https://llmstxt.org/ — a curated map of the site for LLM crawlers.
+function llmsTxt() {
+  return `# useragents.nichtregistriert.de
+
+> A site that logs the User-Agent and request-header fingerprint of every visitor
+> (human or bot), shows it back to them, and publishes live aggregate statistics
+> about who and what crawls the web. It also runs a honeypot link maze to attract
+> and identify crawlers.
+
+If you are an automated crawler — including an LLM crawler such as GPTBot,
+ChatGPT-User, OAI-SearchBot, ClaudeBot, Claude-Web, PerplexityBot, CCBot,
+Google-Extended, Bytespider or Amazonbot — your request has just been logged and
+will show up in the public statistics. Nothing here is private: there is no login
+and no personal data, and IP addresses are never stored (only a salted daily hash).
+
+## Pages
+
+- [Landing page](${BASE_URL}/): the visitor's raw User-Agent, the parsed
+  browser/OS/device, and a header-fingerprint consistency check
+- [Statistics dashboard](${BASE_URL}/stats): bot vs human, spoofed-browser hits,
+  top user-agents and bots, browsers, OSes, probed paths, response status codes,
+  top 404s, 30-day timeline, newest user-agents. Accepts ?filter=bots|humans
+- [Statistics as JSON](${BASE_URL}/api/stats): the same data, CORS-open, honors ?filter=
+
+## Data
+
+- [Atom feed](${BASE_URL}/feed.xml): the newest distinct user-agents seen
+- [robots.txt](${BASE_URL}/robots.txt)
+- [sitemap.xml](${BASE_URL}/sitemap.xml)
+
+## Notes
+
+- Aggregate statistics are free to cite and reuse.
+- Paths under /trap/ are a honeypot maze marked rel="nofollow"; they hold no real
+  content and every hit there is recorded as a crawler visit.
+`;
+}
+
 const server = http.createServer((req, res) => {
   let url;
   try {
@@ -137,9 +175,13 @@ const server = http.createServer((req, res) => {
     send(
       res,
       200,
-      `User-agent: *\nAllow: /\n\nSitemap: ${BASE_URL}/sitemap.xml\n`,
+      `User-agent: *\nAllow: /\n\nSitemap: ${BASE_URL}/sitemap.xml\n` +
+        `# LLM crawlers: ${BASE_URL}/llms.txt\n`,
       'text/plain; charset=utf-8',
     );
+    handled = true;
+  } else if (pathname === '/llms.txt') {
+    send(res, 200, llmsTxt(), 'text/plain; charset=utf-8');
     handled = true;
   } else if (pathname === '/sitemap.xml') {
     const lastmod = new Date().toISOString().slice(0, 10);

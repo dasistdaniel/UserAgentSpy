@@ -14,7 +14,8 @@ Target deployment: `https://useragents.nichtregistriert.de` (Docker on a VPS).
 | `GET /stats` | Live dashboard: totals, bot vs human, spoofed-browser hits, top user-agents, header-fingerprint mismatches, browsers, OSes, devices, probed paths, response status codes, top 404s, 30-day timeline, newest UAs. Auto-refreshes every 30 s. `?filter=bots` / `?filter=humans` narrows every panel below the totals. |
 | `GET /api/stats` | Same data as JSON (CORS-open). Honors the same `?filter=`. |
 | `GET /feed.xml` | Atom feed of the 50 newest distinct user-agents (one `<entry>` each). Advertised via `<link rel="alternate">` in every page head. |
-| `GET /robots.txt` | Allows everything, points crawlers at the sitemap. |
+| `GET /llms.txt` | [llmstxt.org](https://llmstxt.org/) map of the site for LLM crawlers — blurb + links to the pages and data. Pointed at from `robots.txt`. |
+| `GET /robots.txt` | Allows everything, points crawlers at the sitemap and `/llms.txt`. |
 | `GET /sitemap.xml` | Lists `/` and `/stats`. |
 | `GET /trap/<depth>/<token>` | Honeypot "crawler maze" — every page links to a few deeper ones (bounded at depth 8). Hits are logged with `source = honeypot`. |
 | anything else | Logged as a 404 (bot probes like `/wp-login.php` are valuable data). |
