@@ -16,6 +16,9 @@ services:
       # IndexNow key: pings Bing + Yandex to crawl our URLs (once/day, only on an
       # https BASE_URL). Generate one: `openssl rand -hex 16`. Leave empty to disable.
       INDEXNOW_KEY: ""
+      # Google Search Console: token from the googleXXXX.html verification file
+      # (.html suffix optional). Empty = route disabled.
+      GOOGLE_VERIFY: ""
     volumes:
       - uaspy-data:/data
     ports:

@@ -6,3 +6,6 @@ data/
 .env
 .DS_Store
 *.log
+
+# Search-engine verification files — served from GOOGLE_VERIFY, not from disk
+google*.html

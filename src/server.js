@@ -22,6 +22,12 @@ const TRUST_PROXY = /^(1|true|yes|on)$/i.test(process.env.TRUST_PROXY || '');
 const SITE_PATHS = ['/', '/stats'];
 const INDEXNOW_KEY = indexNowKey();
 
+// Google Search Console file verification: set to the token from the
+// googleXXXX.html file Google hands you (with or without the .html suffix).
+const GOOGLE_VERIFY = (process.env.GOOGLE_VERIFY || '')
+  .trim()
+  .replace(/\.html$/i, '');
+
 initDb(DB_PATH);
 const SALT = getSalt();
 
@@ -141,6 +147,10 @@ const server = http.createServer((req, res) => {
   } else if (INDEXNOW_KEY && pathname === `/${INDEXNOW_KEY}.txt`) {
     // IndexNow ownership-verification file.
     send(res, 200, INDEXNOW_KEY, 'text/plain; charset=utf-8');
+    handled = true;
+  } else if (GOOGLE_VERIFY && pathname === `/${GOOGLE_VERIFY}.html`) {
+    // Google Search Console ownership-verification file.
+    send(res, 200, `google-site-verification: ${GOOGLE_VERIFY}.html`, 'text/html; charset=utf-8');
     handled = true;
   } else if (pathname.startsWith('/trap/')) {
     const trap = parseTrapPath(pathname);

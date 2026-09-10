@@ -41,6 +41,14 @@ file at `https://useragents.nichtregistriert.de/<key>.txt`. The last-ping
 timestamp lives in the `meta` table, so container restarts don't re-spam.
 Leave the key empty to disable the feature entirely.
 
+### Google Search Console (file verification)
+
+When you add the property in Search Console, pick the HTML-file method and set
+`GOOGLE_VERIFY` to the token from the `googleXXXX.html` file Google gives you
+(the `.html` suffix is optional). The server then answers
+`GET /googleXXXX.html` with `google-site-verification: googleXXXX.html`.
+After it verifies, submit `https://useragents.nichtregistriert.de/sitemap.xml`.
+
 ## Data & privacy
 
 - Stored per request: timestamp, raw UA string, path, method, status, referer,
@@ -63,7 +71,7 @@ npm run dev           # same, with --watch
 Env vars: `PORT` (7060), `HOST` (0.0.0.0), `DB_PATH` (./data/app.db),
 `BASE_URL` (http://localhost:PORT), `TRUST_PROXY` (false),
 `TRAP_SECRET` (changes the maze token space),
-`INDEXNOW_KEY` (empty — see below).
+`INDEXNOW_KEY` (empty — see below), `GOOGLE_VERIFY` (empty — see below).
 
 ## Deploy with Docker
 
