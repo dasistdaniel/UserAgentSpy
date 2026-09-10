@@ -7,6 +7,7 @@ import {
 } from './db.js';
 import { indexNowKey, maybePingIndexNow } from './indexnow.js';
 import { parseUA } from './ua.js';
+import { analyzeRequest } from './fingerprint.js';
 import {
   renderIndex,
   renderStats,
@@ -90,6 +91,7 @@ const server = http.createServer((req, res) => {
   const pathname = decodeURIComponent(url.pathname).replace(/\/{2,}/g, '/');
   const ua = req.headers['user-agent'] || '';
   const parsed = parseUA(ua);
+  const fp = analyzeRequest(req, parsed);
 
   let status = 200;
   let source = 'direct';
@@ -106,6 +108,7 @@ const server = http.createServer((req, res) => {
     bodyOut = renderIndex({
       ua,
       parsed,
+      fp,
       headers: req.headers,
       ipHashShown: ipHash(clientIp(req)),
       trapLinks: seedTrapLinks(),
@@ -186,6 +189,7 @@ const server = http.createServer((req, res) => {
         ts: now(),
         ua,
         parsed,
+        fp,
         path: pathname.slice(0, 512),
         method: req.method,
         status,

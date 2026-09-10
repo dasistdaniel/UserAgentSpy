@@ -10,8 +10,8 @@ Target deployment: `https://useragents.nichtregistriert.de` (Docker on a VPS).
 
 | Route | Purpose |
 | --- | --- |
-| `GET /` | Shows your raw User-Agent + what the server parsed from it (browser, OS, device, bot?). Records the visit. |
-| `GET /stats` | Live dashboard: totals, bot vs human, top user-agents, browsers, OSes, devices, probed paths, 30-day timeline, newest UAs. Auto-refreshes every 30 s. `?filter=bots` / `?filter=humans` narrows every panel below the totals. |
+| `GET /` | Shows your raw User-Agent + what the server parsed from it (browser, OS, device, bot?) **plus a header fingerprint** — whether `Accept`, `Accept-Encoding`, `Sec-Fetch-*`, `Sec-CH-UA` and the HTTP version match the browser the UA claims to be. Records the visit. |
+| `GET /stats` | Live dashboard: totals, bot vs human, spoofed-browser hits, top user-agents, header-fingerprint mismatches, browsers, OSes, devices, probed paths, 30-day timeline, newest UAs. Auto-refreshes every 30 s. `?filter=bots` / `?filter=humans` narrows every panel below the totals. |
 | `GET /api/stats` | Same data as JSON (CORS-open). Honors the same `?filter=`. |
 | `GET /robots.txt` | Allows everything, points crawlers at the sitemap. |
 | `GET /sitemap.xml` | Lists `/` and `/stats`. |
@@ -52,7 +52,9 @@ After it verifies, submit `https://useragents.nichtregistriert.de/sitemap.xml`.
 ## Data & privacy
 
 - Stored per request: timestamp, raw UA string, path, method, status, referer,
-  `Accept-Language`, parsed browser/OS/device, bot flag + guessed bot name.
+  `Accept-Language`, parsed browser/OS/device, bot flag + guessed bot name,
+  HTTP version, whether Client Hints were sent, and a **spoof score** with the
+  list of failed header checks (see below).
 - **IP addresses are never stored.** Only a truncated SHA-256 of
   `secret_salt : yyyy-mm-dd : ip` is kept, so the same visitor can be counted once
   per day without the address being recoverable. The salt is random per database
@@ -65,6 +67,32 @@ After it verifies, submit `https://useragents.nichtregistriert.de/sitemap.xml`.
   the per-hit path/referer/timeline detail ages out. Freed pages are returned to
   the OS via incremental vacuum; a full `VACUUM` on an existing DB is a one-time
   manual step if you want the file itself to shrink immediately.
+
+## Header fingerprint & spoof detection
+
+The UA string is trivially forged, so `src/fingerprint.js` also looks at headers
+a *real* browser sends fairly rigidly. When a request's UA claims a mainstream
+browser (Chrome, Firefox, Safari, Edge…) each of these adds to a **spoof score**:
+
+| Signal | Weight |
+| --- | --- |
+| no `Accept` header | 3 |
+| `Accept: */*` (browsers send `text/html,…` for navigations) | 2 |
+| no `Accept-Encoding` header | 3 |
+| `Accept-Encoding` with no known compression | 2 |
+| no `Accept-Language` header | 1 |
+| HTTP/1.0 request | 2 |
+| no `Sec-Fetch-*` headers | 2 |
+| Chromium ≥ 90 without `Sec-CH-UA` | 2 |
+| `Connection: close` on HTTP/1.1 | 1 |
+| `From` header set (crawler contact-address convention) | 4 |
+
+Score ≥ 4 (i.e. at least two independent signals) marks the visit as a
+**suspected spoofed browser** on `/stats`. It is deliberately *separate* from the
+UA-regex `is_bot` flag — no single missing header is proof (a proxy can strip
+one, an old browser lacks `Sec-Fetch`), so the reasons are always shown so a
+human can judge. **If your reverse proxy strips these headers, every browser
+visit will be flagged** — check `/` in a real browser after deploying.
 
 ## Run locally
 
@@ -163,11 +191,13 @@ docker run --rm -v uaspy-data:/data -v "$PWD":/backup alpine \
 
 ```
 src/
-  server.js    HTTP server + routing + request logging
-  db.js        node:sqlite schema, recordVisit(), getStats()
-  ua.js        dependency-free User-Agent parser + bot detection
-  views.js     HTML rendering (inline CSS, dark theme)
-  honeypot.js  bounded crawler-maze link generation
+  server.js      HTTP server + routing + request logging
+  db.js          node:sqlite schema, recordVisit(), getStats(), retention
+  ua.js          dependency-free User-Agent parser + bot detection
+  fingerprint.js header-fingerprint analysis + spoof score
+  views.js       HTML rendering (inline CSS, dark theme)
+  honeypot.js    bounded crawler-maze link generation
+  indexnow.js    IndexNow ping (Bing + Yandex)
 Dockerfile          node:24-alpine, runs as non-root
 docker-compose.yml  port 7060, named volume for the DB
 ```

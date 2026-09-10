@@ -1,5 +1,7 @@
 // Dependency-free HTML rendering via template literals.
 
+import { SPOOF_THRESHOLD, explainCodes } from './fingerprint.js';
+
 export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -67,7 +69,30 @@ const botTag = (isBot) =>
 const SITE = 'useragents.nichtregistriert.de';
 const SITE_LINK = `<a href="https://${SITE}">${SITE}</a>`;
 
-export function renderIndex({ ua, parsed, headers, ipHashShown, trapLinks }) {
+function fingerprintVerdict(parsed, fp) {
+  if (!fp || !fp.claimsBrowser) {
+    return '<span class="muted">n/a — not claiming a mainstream browser</span>';
+  }
+  if (fp.spoofScore === 0) {
+    return `<span class="tag human">CONSISTENT</span> headers match ${esc(parsed.browser)}`;
+  }
+  const reasons = explainCodes(fp.codes.join(','))
+    .map((r) => `<li>${esc(r)}</li>`)
+    .join('');
+  return `<span class="tag bot">MISMATCH</span> score ${fp.spoofScore}
+    <ul class="muted" style="margin:6px 0 0;padding-left:18px">${reasons}</ul>`;
+}
+
+export function renderIndex({ ua, parsed, fp, headers, ipHashShown, trapLinks }) {
+  const fpRows = [
+    ['HTTP version', esc(fp.httpVersion)],
+    ['Accept', `<span class="mono-break">${esc(fp.accept || '—')}</span>`],
+    ['Accept-Encoding', esc(fp.acceptEncoding || '—')],
+    ['Sec-Fetch (site/mode/dest/user)', esc(fp.secFetch || '—')],
+    ['Sec-CH-UA', `<span class="mono-break">${esc(fp.secChUa || '—')}</span>`],
+    ['Consistency', fingerprintVerdict(parsed, fp)],
+  ];
+
   const rows = [
     ['Classification', botTag(parsed.isBot) + (parsed.botName ? ` <span class="muted">${esc(parsed.botName)}</span>` : '')],
     ['Browser', esc(parsed.browser) + (parsed.browserVersion ? ` ${esc(parsed.browserVersion)}` : '')],
@@ -98,6 +123,15 @@ export function renderIndex({ ua, parsed, headers, ipHashShown, trapLinks }) {
   <h2>What we read from it</h2>
   <table><tbody>
     ${rows.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`).join('')}
+  </tbody></table>
+</div>
+
+<div class="panel">
+  <h2>Header fingerprint</h2>
+  <p class="muted">Beyond the UA string, real browsers send a predictable set of
+  headers. Here is what yours sent, and whether it matches the browser it claims.</p>
+  <table><tbody>
+    ${fpRows.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`).join('')}
   </tbody></table>
 </div>
 
@@ -202,6 +236,7 @@ export function renderStats(s) {
   <div class="card"><div class="n">${t.honeypot_hits.toLocaleString('en')}</div><div class="l">honeypot hits</div></div>
   <div class="card"><div class="n">${t.last24h.toLocaleString('en')}</div><div class="l">last 24 hours</div></div>
   <div class="card"><div class="n">${t.last7d.toLocaleString('en')}</div><div class="l">last 7 days</div></div>
+  <div class="card"><div class="n">${(t.spoofed_visits || 0).toLocaleString('en')}</div><div class="l">spoofed-browser hits</div></div>
 </div>
 
 <div class="panel">
@@ -235,6 +270,47 @@ ${
     : `<div class="panel">
   <h2>top bots &amp; libraries</h2>
   ${s.topBots.length ? barList(s.topBots) : '<p class="muted">none yet</p>'}
+</div>`
+}
+
+${
+  f === 'bots'
+    ? ''
+    : `<div class="panel">
+  <h2>header fingerprint</h2>
+  <p class="muted">
+    <strong>${(t.spoofed_visits || 0).toLocaleString('en')}</strong> hits from
+    <strong>${(t.spoofed_uas || 0).toLocaleString('en')}</strong> user-agents claim a
+    real browser but their request headers don't match one (spoof score &ge;
+    ${SPOOF_THRESHOLD}).${
+      s.clientHints && s.clientHints.chromium_visits
+        ? ` Client Hints (Sec-CH-UA) seen on ${(
+            s.clientHints.with_hints || 0
+          ).toLocaleString('en')} of ${s.clientHints.chromium_visits.toLocaleString(
+            'en',
+          )} Chromium visits.`
+        : ''
+    }
+  </p>
+  ${
+    s.spoofedUserAgents && s.spoofedUserAgents.length
+      ? `<table>
+    <thead><tr><th>user-agent</th><th>hits</th><th>score</th><th>failed checks</th></tr></thead>
+    <tbody>
+    ${s.spoofedUserAgents
+      .map(
+        (u) => `<tr>
+      <td class="mono-break">${esc(u.ua) || '<span class="muted">(empty)</span>'}</td>
+      <td>${u.c.toLocaleString('en')}</td>
+      <td>${u.score}</td>
+      <td class="muted">${explainCodes(u.reasons).map(esc).join('; ')}</td>
+    </tr>`,
+      )
+      .join('')}
+    </tbody>
+  </table>`
+      : '<p class="muted">none yet — every browser-claiming visit passed the header check</p>'
+  }
 </div>`
 }
 

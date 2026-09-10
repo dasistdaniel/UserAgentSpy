@@ -3,6 +3,8 @@ import crypto from 'node:crypto';
 import { dirname } from 'node:path';
 import { mkdirSync } from 'node:fs';
 
+import { SPOOF_THRESHOLD } from './fingerprint.js';
+
 let db;
 
 // Raw per-request rows older than this are pruned daily (see pruneVisits).
@@ -41,7 +43,11 @@ export function initDb(path) {
       browser_version TEXT,
       os              TEXT,
       device          TEXT,
-      source          TEXT    NOT NULL
+      source          TEXT    NOT NULL,
+      http_version    TEXT,
+      client_hints    INTEGER NOT NULL DEFAULT 0,
+      spoof_score     INTEGER NOT NULL DEFAULT 0,
+      spoof_reasons   TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_visits_ts      ON visits(ts);
     CREATE INDEX IF NOT EXISTS idx_visits_ua_hash ON visits(ua_hash);
@@ -62,6 +68,17 @@ export function initDb(path) {
     CREATE INDEX IF NOT EXISTS idx_ua_hits       ON user_agents(hits DESC);
     CREATE INDEX IF NOT EXISTS idx_ua_first_seen ON user_agents(first_seen DESC);
   `);
+
+  // Migrate DBs created before the fingerprint columns existed.
+  const visitCols = db.prepare('PRAGMA table_info(visits)').all().map((c) => c.name);
+  const addCol = (name, def) => {
+    if (!visitCols.includes(name)) db.exec(`ALTER TABLE visits ADD COLUMN ${name} ${def}`);
+  };
+  addCol('http_version', 'TEXT');
+  addCol('client_hints', 'INTEGER NOT NULL DEFAULT 0');
+  addCol('spoof_score', 'INTEGER NOT NULL DEFAULT 0');
+  addCol('spoof_reasons', 'TEXT');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_visits_spoof ON visits(spoof_score)');
 
   if (!db.prepare('SELECT 1 FROM meta WHERE key = ?').get('salt')) {
     db.prepare('INSERT INTO meta (key, value) VALUES (?, ?)').run(
@@ -93,18 +110,22 @@ const uaHashOf = (ua) =>
 export function recordVisit(v) {
   const uaHash = uaHashOf(v.ua);
   const p = v.parsed;
+  const fp = v.fp || {};
   const bot = p.isBot ? 1 : 0;
 
   db.prepare(
     `INSERT INTO visits
        (ts, ua, ua_hash, path, method, status, referer, accept_language, ip_hash,
-        is_bot, bot_name, browser, browser_version, os, device, source)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        is_bot, bot_name, browser, browser_version, os, device, source,
+        http_version, client_hints, spoof_score, spoof_reasons)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
   ).run(
     v.ts, v.ua || '', uaHash, v.path, v.method, v.status,
     v.referer || null, v.acceptLanguage || null, v.ipHash || null,
     bot, p.botName || null, p.browser || null, p.browserVersion || null,
     p.os || null, p.device || null, v.source,
+    fp.httpVersion || null, fp.clientHints ? 1 : 0, fp.spoofScore || 0,
+    fp.codes && fp.codes.length ? fp.codes.join(',') : null,
   );
 
   const changed = db.prepare(
@@ -158,13 +179,36 @@ function computeStats(filter) {
       (SELECT COUNT(*) FROM user_agents WHERE is_bot = 1)             AS bot_uas,
       (SELECT COUNT(*) FROM visits WHERE source = 'honeypot')         AS honeypot_hits,
       (SELECT COUNT(*) FROM visits WHERE ts >= datetime('now','-1 day'))  AS last24h,
-      (SELECT COUNT(*) FROM visits WHERE ts >= datetime('now','-7 day'))  AS last7d
+      (SELECT COUNT(*) FROM visits WHERE ts >= datetime('now','-7 day'))  AS last7d,
+      (SELECT COUNT(*) FROM visits WHERE spoof_score >= ${SPOOF_THRESHOLD} AND is_bot = 0)
+                                                                     AS spoofed_visits,
+      (SELECT COUNT(DISTINCT ua_hash) FROM visits
+         WHERE spoof_score >= ${SPOOF_THRESHOLD} AND is_bot = 0)      AS spoofed_uas
+  `);
+
+  // Client-Hints adoption among visits that claim a Chromium browser.
+  const clientHints = one(`
+    SELECT
+      COUNT(*)                                  AS chromium_visits,
+      SUM(CASE WHEN client_hints = 1 THEN 1 ELSE 0 END) AS with_hints
+    FROM visits
+    WHERE is_bot = 0
+      AND browser IN ('Chrome','Microsoft Edge','Opera','Vivaldi',
+                      'Samsung Internet','Yandex Browser','UC Browser')
   `);
 
   return {
     generatedAt: new Date().toISOString(),
     filter,
     totals,
+    clientHints,
+    spoofedUserAgents: all(`
+      SELECT ua, browser, browser_version AS version,
+             COUNT(*) AS c, MAX(spoof_score) AS score,
+             MAX(spoof_reasons) AS reasons, MAX(ts) AS last_seen
+      FROM visits
+      WHERE spoof_score >= ${SPOOF_THRESHOLD} AND is_bot = 0
+      GROUP BY ua_hash ORDER BY c DESC, score DESC LIMIT 15`),
     topUserAgents: all(`
       SELECT ua, hits, is_bot, bot_name, browser, os, device, last_seen
       FROM user_agents ${vWhere} ORDER BY hits DESC, last_seen DESC LIMIT 30`),
