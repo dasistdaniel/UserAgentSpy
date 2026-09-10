@@ -38,7 +38,7 @@ export function renderAtom({ baseUrl, entries }) {
     <title>${xml(entryTitle(u))}</title>
     <id>tag:${host},2026:ua/${xml(u.ua_hash)}</id>
     <updated>${rfc3339(u.first_seen)}</updated>
-    <link href="${xml(baseUrl)}/stats"/>
+    <link href="${xml(baseUrl)}/stats/ua/${xml(u.ua_hash)}"/>
     <content type="text">${xml(content)}</content>
   </entry>`;
     })

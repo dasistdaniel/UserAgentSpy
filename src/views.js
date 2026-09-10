@@ -65,6 +65,12 @@ ${refresh ? `<meta http-equiv="refresh" content="${refresh}">` : ''}
 const botTag = (isBot) =>
   isBot ? '<span class="tag bot">BOT</span>' : '<span class="tag human">HUMAN</span>';
 
+// A user-agent string that links to its detail page (/stats/ua/<hash>).
+const uaCell = (hash, ua) =>
+  `<a class="mono-break" href="/stats/ua/${esc(hash)}">${
+    esc(ua) || '<span class="muted">(empty)</span>'
+  }</a>`;
+
 // Canonical public name — shown in every footer regardless of the BASE_URL the
 // container happens to run with (LAN IP during testing, etc.).
 const SITE = 'useragents.nichtregistriert.de';
@@ -267,7 +273,7 @@ export function renderStats(s) {
     ${s.topUserAgents
       .map(
         (u) => `<tr>
-      <td class="mono-break">${esc(u.ua) || '<span class="muted">(empty)</span>'}</td>
+      <td>${uaCell(u.ua_hash, u.ua)}</td>
       <td>${u.hits.toLocaleString('en')}</td>
       <td>${botTag(!!u.is_bot)}</td>
       <td class="muted">${esc(u.browser || '—')}${u.os ? ' / ' + esc(u.os) : ''}</td>
@@ -315,7 +321,7 @@ ${
     ${s.spoofedUserAgents
       .map(
         (u) => `<tr>
-      <td class="mono-break">${esc(u.ua) || '<span class="muted">(empty)</span>'}</td>
+      <td>${uaCell(u.ua_hash, u.ua)}</td>
       <td>${u.c.toLocaleString('en')}</td>
       <td>${u.score}</td>
       <td class="muted">${explainCodes(u.reasons).map(esc).join('; ')}</td>
@@ -389,7 +395,7 @@ ${
         (u) => `<tr>
       <td class="muted">${esc(u.first_seen)}</td>
       <td>${botTag(!!u.is_bot)}</td>
-      <td class="mono-break">${esc(u.ua) || '<span class="muted">(empty)</span>'}</td>
+      <td>${uaCell(u.ua_hash, u.ua)}</td>
     </tr>`,
       )
       .join('')}
@@ -400,6 +406,130 @@ ${
 <footer>${SITE_LINK} &middot; data collected since first request &middot;
   <a href="/feed.xml">feed</a> &middot; <a href="/api/stats">json</a></footer>`;
   return layout('useragents.nichtregistriert.de — statistics', body, { refresh: 30 });
+}
+
+export function renderUaDetail({ detail }) {
+  const { meta: m, agg, trapDepth, worst, httpVersions, daily, paths, recent } = detail;
+
+  const maxDay = Math.max(1, ...daily.map((d) => d.c));
+  const spark = daily
+    .map(
+      (d) =>
+        `<div style="height:${((d.c / maxDay) * 100).toFixed(1)}%" title="${esc(d.day)}: ${
+          d.c
+        }"></div>`,
+    )
+    .join('');
+
+  const rows = [
+    ['Classification', botTag(!!m.is_bot) + (m.bot_name ? ` <span class="muted">${esc(m.bot_name)}</span>` : '')],
+    ['Browser', esc(m.browser || '—')],
+    ['Operating system', esc(m.os || '—')],
+    ['Device type', esc(m.device || '—')],
+    ['First seen', esc(m.first_seen)],
+    ['Last seen', esc(m.last_seen)],
+    ['Total hits (catalogue)', Number(m.hits).toLocaleString('en')],
+    ['Retained requests', `${Number(agg.logged).toLocaleString('en')}${
+      agg.retained_from ? ` <span class="muted">(since ${esc(agg.retained_from)})</span>` : ''
+    }`],
+  ];
+
+  const fpReasons = worst
+    ? explainCodes(worst.spoof_reasons).map((r) => `<li>${esc(r)}</li>`).join('')
+    : '';
+
+  const body = `
+<header>
+  <h1>user-agent detail</h1>
+  <p class="muted">${esc(m.ua_hash)}</p>
+</header>
+<nav><a href="/stats">&larr; statistics</a><a href="/feed.xml">feed</a></nav>
+
+<div class="panel">
+  <h2>User-Agent string</h2>
+  <div class="ua-string">${esc(m.ua || '(no User-Agent header sent)')}</div>
+</div>
+
+<div class="panel">
+  <h2>What we know</h2>
+  <table><tbody>
+    ${rows.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${v}</td></tr>`).join('')}
+  </tbody></table>
+</div>
+
+<div class="panel">
+  <h2>Behaviour</h2>
+  <table><tbody>
+    <tr><th>Honeypot hits</th><td>${Number(agg.honeypot_hits || 0).toLocaleString('en')}${
+      trapDepth ? ` <span class="muted">— walked the maze to depth ${trapDepth}</span>` : ''
+    }</td></tr>
+    <tr><th>Decoy endpoint hits</th><td>${Number(agg.decoy_hits || 0).toLocaleString('en')}</td></tr>
+    <tr><th>Header fingerprint</th><td>${
+      worst
+        ? `<span class="tag bot">MISMATCH</span> peak spoof score ${worst.spoof_score}
+           <ul class="muted" style="margin:6px 0 0;padding-left:18px">${fpReasons}</ul>`
+        : m.is_bot
+          ? '<span class="muted">n/a — flagged as a bot by its UA string</span>'
+          : '<span class="tag human">CONSISTENT</span> no failed header checks'
+    }</td></tr>
+    <tr><th>Client Hints sent</th><td>${Number(agg.client_hint_hits || 0).toLocaleString(
+      'en',
+    )} of ${Number(agg.logged).toLocaleString('en')} retained requests</td></tr>
+    <tr><th>HTTP versions</th><td class="muted">${
+      httpVersions.map((h) => `${esc(h.name)} (${h.c})`).join(', ') || '—'
+    }</td></tr>
+  </tbody></table>
+</div>
+
+<div class="panel">
+  <h2>requests per day (last 30d)</h2>
+  ${daily.length ? `<div class="spark">${spark}</div>` : '<p class="muted">no requests in the retention window</p>'}
+</div>
+
+<div class="panel">
+  <h2>paths requested</h2>
+  ${
+    paths.length
+      ? barList(
+          paths.map((p) => ({
+            label: p.path,
+            badge: p.notfound ? '<span class="muted">· 404</span>' : '',
+            c: p.c,
+          })),
+        )
+      : '<p class="muted">no requests in the retention window</p>'
+  }
+</div>
+
+<div class="panel">
+  <h2>recent requests (${recent.length})</h2>
+  ${
+    recent.length
+      ? `<table>
+    <thead><tr><th>time (UTC)</th><th>method</th><th>path</th><th>status</th><th>source</th><th>spoof</th></tr></thead>
+    <tbody>
+    ${recent
+      .map(
+        (r) => `<tr>
+      <td class="muted">${esc(r.ts)}</td>
+      <td>${esc(r.method)}</td>
+      <td class="mono-break">${esc(r.path)}</td>
+      <td>${r.status}</td>
+      <td class="muted">${esc(r.source)}</td>
+      <td>${r.spoof_score || ''}</td>
+    </tr>`,
+      )
+      .join('')}
+    </tbody>
+  </table>`
+      : '<p class="muted">no requests in the retention window — the catalogue entry above survives pruning</p>'
+  }
+</div>
+
+<footer>${SITE_LINK} &middot; <a href="/stats">all statistics</a></footer>`;
+
+  const name = m.bot_name || m.browser || 'unknown';
+  return layout(`${name} — user-agent detail`, body);
 }
 
 export function renderNotFound({ path }) {

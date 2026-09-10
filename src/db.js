@@ -154,6 +154,67 @@ export function recentUserAgents(limit = 50) {
     .all(Math.min(Math.max(1, limit | 0), 200));
 }
 
+// Everything known about one user-agent (by ua_hash). Returns null if unseen.
+// After retention pruning the per-request rows age out but the catalogue row
+// stays, so `recent`/`daily`/`paths` may be empty while `meta` is still present.
+export function getUserAgentDetail(hash) {
+  const meta = db
+    .prepare(
+      `SELECT ua_hash, ua, first_seen, last_seen, hits, is_bot, bot_name, browser, os, device
+       FROM user_agents WHERE ua_hash = ?`,
+    )
+    .get(hash);
+  if (!meta) return null;
+
+  const one = (sql) => db.prepare(sql).get(hash);
+  const all = (sql) => db.prepare(sql).all(hash);
+
+  const agg = one(`
+    SELECT COUNT(*) AS logged,
+           MAX(spoof_score) AS max_spoof,
+           MIN(ts) AS retained_from,
+           SUM(CASE WHEN source = 'honeypot' THEN 1 ELSE 0 END) AS honeypot_hits,
+           SUM(CASE WHEN source = 'decoy'    THEN 1 ELSE 0 END) AS decoy_hits,
+           SUM(CASE WHEN client_hints = 1    THEN 1 ELSE 0 END) AS client_hint_hits
+    FROM visits WHERE ua_hash = ?`);
+
+  const trapPaths = all(
+    `SELECT DISTINCT path FROM visits WHERE ua_hash = ? AND source = 'honeypot'`,
+  );
+  const trapDepth = trapPaths.reduce((m, r) => {
+    const d = parseInt(r.path.split('/')[2], 10);
+    return Number.isFinite(d) && d > m ? d : m;
+  }, 0);
+
+  const worst = one(`
+    SELECT spoof_score, spoof_reasons FROM visits
+    WHERE ua_hash = ? AND spoof_score > 0
+    ORDER BY spoof_score DESC, ts DESC LIMIT 1`);
+
+  const httpVersions = all(`
+    SELECT COALESCE(http_version, '?') AS name, COUNT(*) AS c
+    FROM visits WHERE ua_hash = ? GROUP BY name ORDER BY c DESC`);
+
+  return {
+    meta,
+    agg,
+    trapDepth,
+    worst,
+    httpVersions,
+    daily: all(`
+      SELECT substr(ts,1,10) AS day, COUNT(*) AS c
+      FROM visits WHERE ua_hash = ? AND ts >= datetime('now','-30 day')
+      GROUP BY day ORDER BY day`),
+    paths: all(`
+      SELECT path, COUNT(*) AS c, MAX(status) AS status,
+             SUM(CASE WHEN status = 404 THEN 1 ELSE 0 END) AS notfound
+      FROM visits WHERE ua_hash = ? GROUP BY path ORDER BY c DESC LIMIT 30`),
+    recent: all(`
+      SELECT ts, method, path, status, source, referer, spoof_score
+      FROM visits WHERE ua_hash = ? ORDER BY ts DESC LIMIT 100`),
+  };
+}
+
 // Short-lived cache: /stats auto-refreshes every 30 s and scrapers hammer
 // /api/stats, so without this each hit would run ~10 aggregate queries. A few
 // seconds of staleness on a dashboard is fine; TTL wins over write-invalidation
@@ -214,17 +275,17 @@ function computeStats(filter) {
     totals,
     clientHints,
     spoofedUserAgents: all(`
-      SELECT ua, browser, browser_version AS version,
+      SELECT ua_hash, ua, browser, browser_version AS version,
              COUNT(*) AS c, MAX(spoof_score) AS score,
              MAX(spoof_reasons) AS reasons, MAX(ts) AS last_seen
       FROM visits
       WHERE spoof_score >= ${SPOOF_THRESHOLD} AND is_bot = 0
       GROUP BY ua_hash ORDER BY c DESC, score DESC LIMIT 15`),
     topUserAgents: all(`
-      SELECT ua, hits, is_bot, bot_name, browser, os, device, last_seen
+      SELECT ua_hash, ua, hits, is_bot, bot_name, browser, os, device, last_seen
       FROM user_agents ${vWhere} ORDER BY hits DESC, last_seen DESC LIMIT 30`),
     newestUserAgents: all(`
-      SELECT ua, first_seen, is_bot, bot_name, browser, os
+      SELECT ua_hash, ua, first_seen, is_bot, bot_name, browser, os
       FROM user_agents ${vWhere} ORDER BY first_seen DESC LIMIT 15`),
     topBots: all(`
       SELECT COALESCE(NULLIF(bot_name,''), ua) AS name, COUNT(*) AS c

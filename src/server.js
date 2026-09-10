@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 
 import {
   initDb, getSalt, getMeta, setMeta, recordVisit, getStats,
-  recentUserAgents, pruneVisits, retentionDays, closeDb,
+  recentUserAgents, getUserAgentDetail, pruneVisits, retentionDays, closeDb,
 } from './db.js';
 import { indexNowKey, maybePingIndexNow } from './indexnow.js';
 import { parseUA } from './ua.js';
@@ -12,6 +12,7 @@ import { renderAtom } from './feed.js';
 import {
   renderIndex,
   renderStats,
+  renderUaDetail,
   renderTrap,
   renderNotFound,
 } from './views.js';
@@ -162,6 +163,15 @@ const server = http.createServer((req, res) => {
     bodyOut = renderStats(getStats(statsFilter(url.searchParams.get('filter'))));
     send(res, 200, bodyOut);
     handled = true;
+  } else if (pathname.startsWith('/stats/ua/')) {
+    const hash = pathname.slice('/stats/ua/'.length);
+    const detail = /^[0-9a-f]{32}$/.test(hash) ? getUserAgentDetail(hash) : null;
+    if (detail) {
+      bodyOut = renderUaDetail({ detail });
+      send(res, 200, bodyOut);
+      handled = true;
+    }
+    // else: fall through to the 404 handler
   } else if (pathname === '/api/stats') {
     const data = getStats(statsFilter(url.searchParams.get('filter')));
     send(res, 200, JSON.stringify(data, null, 2), 'application/json; charset=utf-8', {
@@ -194,6 +204,12 @@ const server = http.createServer((req, res) => {
         `  <url><loc>${BASE_URL}${p}</loc><lastmod>${lastmod}</lastmod>` +
         `<changefreq>daily</changefreq><priority>${p === '/' ? '1.0' : '0.8'}</priority></url>`,
     );
+    for (const u of recentUserAgents(200)) {
+      urls.push(
+        `  <url><loc>${BASE_URL}/stats/ua/${u.ua_hash}</loc>` +
+          `<lastmod>${u.last_seen.slice(0, 10)}</lastmod><priority>0.3</priority></url>`,
+      );
+    }
     send(
       res,
       200,

@@ -12,11 +12,12 @@ Target deployment: `https://useragents.nichtregistriert.de` (Docker on a VPS).
 | --- | --- |
 | `GET /` | Shows your raw User-Agent + what the server parsed from it (browser, OS, device, bot?) **plus a header fingerprint** — whether `Accept`, `Accept-Encoding`, `Sec-Fetch-*`, `Sec-CH-UA` and the HTTP version match the browser the UA claims to be. Records the visit. |
 | `GET /stats` | Live dashboard: totals, bot vs human, spoofed-browser hits, top user-agents, header-fingerprint mismatches, browsers, OSes, devices, probed paths, response status codes, top 404s, 30-day timeline, newest UAs. Auto-refreshes every 30 s. `?filter=bots` / `?filter=humans` narrows every panel below the totals. |
+| `GET /stats/ua/<hash>` | Detail page for one user-agent (by its `ua_hash`): parsed info, first/last seen, honeypot depth walked, decoy hits, fingerprint verdict, per-day activity, paths requested, recent requests. Linked from every UA in the `/stats` tables and from the feed. |
 | `GET /api/stats` | Same data as JSON (CORS-open). Honors the same `?filter=`. |
-| `GET /feed.xml` | Atom feed of the 50 newest distinct user-agents (one `<entry>` each). Advertised via `<link rel="alternate">` in every page head. |
+| `GET /feed.xml` | Atom feed of the 50 newest distinct user-agents (one `<entry>` each, linking to its detail page). Advertised via `<link rel="alternate">` in every page head. |
 | `GET /llms.txt` | [llmstxt.org](https://llmstxt.org/) map of the site for LLM crawlers — blurb + links to the pages and data. Pointed at from `robots.txt`. |
 | `GET /robots.txt` | Allows everything, points crawlers at the sitemap and `/llms.txt`. |
-| `GET /sitemap.xml` | Lists `/` and `/stats`. |
+| `GET /sitemap.xml` | Lists `/`, `/stats`, and the 200 most recent `/stats/ua/<hash>` pages. |
 | `GET /trap/<depth>/<token>` | Honeypot "crawler maze" — every page links to a few deeper ones (bounded at depth 8). Hits are logged with `source = honeypot`. |
 | `GET /wp-login.php`, `/.env`, … | **Only when `FAKE_ENDPOINTS` is on:** a fake `200` for common scanner probes instead of a `404`, logged with `source = decoy` (see below). |
 | anything else | Logged as a 404 (bot probes like `/wp-login.php` are valuable data). |
