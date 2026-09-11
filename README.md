@@ -105,13 +105,14 @@ it can't drift out of sync with `VISITS_RETENTION_DAYS`.
 ### GDPR
 
 The above is a solid technical baseline (data minimization, storage limitation,
-an honored opt-out signal, no public exposure of identifiable individuals) but
-**`/datenschutz` ships with a `[PLACEHOLDER]` where the controller's name, postal
-address and contact e-mail must go (Art. 13 GDPR)** — fill that in in
-`src/views.js` (`renderPrivacy`) before treating the site as compliant. Depending
-on how the site is operated, a separate **Impressum** (German TMG/DDG
-"Anbieterkennzeichnung") may also be required — that's a business decision this
-README won't make for you.
+an honored opt-out signal, no public exposure of identifiable individuals).
+`/datenschutz` (`renderPrivacy` in `src/views.js`) names the controller (Art. 13
+GDPR: name + e-mail — no postal address, which isn't strictly required by the
+GDPR text) and states that this is a private, non-commercial project with no
+separate **Impressum** (German DDG §5 "Anbieterkennzeichnung"). Whether that
+private-use framing would hold up is fact-dependent and ultimately the
+operator's call, not something either this README or an AI assistant can
+certify — none of this is legal advice.
 
 ## Header fingerprint & spoof detection
 

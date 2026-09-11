@@ -574,9 +574,14 @@ export function renderPrivacy({ retentionDays } = {}) {
 <div class="panel">
   <h2>Controller</h2>
   <p class="muted">
-    [PLACEHOLDER — name, postal address and contact e-mail of the person or
-    entity responsible for this site under Art. 4(7) GDPR go here. This site
-    is not yet legally complete without this section filled in.]
+    Daniel Intrup<br>
+    E-mail: <a href="mailto:din.trup@googlemail.com">din.trup@googlemail.com</a>
+  </p>
+  <p class="muted">
+    This is a private, non-commercial hobby and security-research project run
+    by an individual with no business interest in it — there is no separate
+    "Impressum" (§5 DDG "Anbieterkennzeichnung"). The contact above covers
+    anything a formal Impressum otherwise would.
   </p>
 </div>
 
