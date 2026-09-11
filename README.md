@@ -12,18 +12,19 @@ Target deployment: `https://useragents.nichtregistriert.de` (Docker on a VPS).
 | --- | --- |
 | `GET /` | Shows your raw User-Agent + what the server parsed from it (browser, OS, device, bot?) **plus a header fingerprint** — whether `Accept`, `Accept-Encoding`, `Sec-Fetch-*`, `Sec-CH-UA` and the HTTP version match the browser the UA claims to be. Records the visit. |
 | `GET /stats` | Live dashboard: totals, bot vs human, spoofed-browser hits, top user-agents, header-fingerprint mismatches, browsers, OSes, devices, probed paths, response status codes, top 404s, 30-day timeline, newest UAs. Auto-refreshes every 30 s. `?filter=bots` / `?filter=humans` narrows every panel below the totals. |
-| `GET /stats/ua/<hash>` | Detail page for one user-agent (by its `ua_hash`): parsed info, first/last seen, honeypot depth walked, decoy hits, fingerprint verdict, per-day activity, paths requested, recent requests. Linked from every UA in the `/stats` tables and from the feed. |
+| `GET /stats/ua/<hash>` | Detail page for one **bot/crawler** user-agent (by its `ua_hash`): parsed info, first/last seen, honeypot depth walked, decoy hits, fingerprint verdict, per-day activity, paths requested, recent requests. 404s for human UAs — see [Data & privacy](#data--privacy). Linked from bot rows in the `/stats` tables and from the feed. |
 | `GET /api/stats` | Same data as JSON (CORS-open). Honors the same `?filter=`. |
-| `GET /feed.xml` | Atom feed of the 50 newest distinct user-agents (one `<entry>` each, linking to its detail page). Advertised via `<link rel="alternate">` in every page head. |
+| `GET /feed.xml` | Atom feed of the 50 newest **bot/crawler** user-agents (one `<entry>` each, linking to its detail page). Advertised via `<link rel="alternate">` in every page head. |
 | `GET /llms.txt` | [llmstxt.org](https://llmstxt.org/) map of the site for LLM crawlers — blurb + links to the pages and data. Pointed at from `robots.txt`. |
-| `GET /robots.txt` | Allows everything, points crawlers at the sitemap and `/llms.txt`. |
-| `GET /sitemap.xml` | Lists `/`, `/stats`, and the 200 most recent `/stats/ua/<hash>` pages. |
+| `GET /robots.txt` | Allows everything, points crawlers at the sitemap, `/llms.txt` and `/datenschutz`. |
+| `GET /sitemap.xml` | Lists `/`, `/stats`, `/datenschutz`, and the 200 most recent **bot** `/stats/ua/<hash>` pages. |
+| `GET /datenschutz` | The privacy policy — see [Data & privacy](#data--privacy). |
 | `GET /trap/<depth>/<token>` | Honeypot "crawler maze" — every page links to a few deeper ones (bounded at depth 8). Hits are logged with `source = honeypot`. |
 | `GET /wp-login.php`, `/.env`, … | **Only when `FAKE_ENDPOINTS` is on:** a fake `200` for common scanner probes instead of a `404`, logged with `source = decoy` (see below). |
 | anything else | Logged as a 404 (bot probes like `/wp-login.php` are valuable data). |
 
-Every request except `/api/stats`, `/healthz` and `/favicon.ico` is written to the
-database.
+Every request except `/api/stats`, `/healthz`, `/favicon.ico`, and requests sending
+`DNT: 1` / `Sec-GPC: 1`, is written to the database.
 
 ## Attracting crawlers ("Standard + Honeypot")
 
@@ -68,22 +69,49 @@ After it verifies, submit `https://useragents.nichtregistriert.de/sitemap.xml`.
 
 ## Data & privacy
 
-- Stored per request: timestamp, raw UA string, path, method, status, referer,
-  `Accept-Language`, parsed browser/OS/device, bot flag + guessed bot name,
-  HTTP version, whether Client Hints were sent, and a **spoof score** with the
-  list of failed header checks (see below).
+The full, human-readable policy is served live at `/datenschutz` (linked from
+every page footer) and is generated from the same constants described here, so
+it can't drift out of sync with `VISITS_RETENTION_DAYS`.
+
+- Stored per request: timestamp, raw UA string, path, method, status,
+  **referer — origin only**, never the path or query string (a Referer can carry
+  a search query or a token that belongs to someone else's site), `Accept-Language`,
+  parsed browser/OS/device, bot flag + guessed bot name, HTTP version, whether
+  Client Hints were sent, and a **spoof score** with the list of failed header
+  checks (see below).
 - **IP addresses are never stored.** Only a truncated SHA-256 of
   `secret_salt : yyyy-mm-dd : ip` is kept, so the same visitor can be counted once
   per day without the address being recoverable. The salt is random per database
   (in the `meta` table).
-- No cookies, no JS trackers, no third-party requests.
+- No cookies, no JS trackers, no third-party requests, no accounts.
+- **`DNT: 1` / `Sec-GPC: 1` is honored as an opt-out**: the request is still served
+  normally, but nothing is written to the database — no row, no catalogue entry.
+- **Individually-identifiable public pages exist only for bots.** `/stats/ua/<hash>`,
+  the Atom feed, and the sitemap only ever include entries where `is_bot = 1`.
+  A human visitor is reflected solely in the aggregate counts on `/stats` — never
+  as a linkable page with its own timestamped request history. This is the main
+  design choice that keeps the site's rich, indexed "crawler observatory" content
+  from turning into a public log of an identifiable person's browsing activity.
 - **Retention:** raw per-request rows are pruned once a day (and on startup) once
   they pass `VISITS_RETENTION_DAYS` (default 90); set it to `0` to keep everything.
-  The `user_agents` catalogue (one row per distinct UA, with first/last seen and
-  hit count) is kept forever, so long-term "who crawls us" data survives — only
-  the per-hit path/referer/timeline detail ages out. Freed pages are returned to
-  the OS via incremental vacuum; a full `VACUUM` on an existing DB is a one-time
-  manual step if you want the file itself to shrink immediately.
+  Once a **human** visitor's browser has been quiet for that same window, its
+  `user_agents` catalogue row is deleted too. **Bot** catalogue rows (first/last
+  seen, hit count) are kept forever — that long-term "who crawls us" record is
+  the project's actual purpose, and automated agents aren't people whose data has
+  to age out under GDPR storage-limitation rules. Freed pages are returned to the
+  OS via incremental vacuum; a full `VACUUM` on an existing DB is a one-time manual
+  step if you want the file itself to shrink immediately.
+
+### GDPR
+
+The above is a solid technical baseline (data minimization, storage limitation,
+an honored opt-out signal, no public exposure of identifiable individuals) but
+**`/datenschutz` ships with a `[PLACEHOLDER]` where the controller's name, postal
+address and contact e-mail must go (Art. 13 GDPR)** — fill that in in
+`src/views.js` (`renderPrivacy`) before treating the site as compliant. Depending
+on how the site is operated, a separate **Impressum** (German TMG/DDG
+"Anbieterkennzeichnung") may also be required — that's a business decision this
+README won't make for you.
 
 ## Header fingerprint & spoof detection
 

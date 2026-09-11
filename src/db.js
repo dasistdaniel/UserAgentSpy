@@ -144,12 +144,17 @@ export function recordVisit(v) {
   }
 }
 
-// Newest distinct user-agents, most-recently-first-seen first. Backs /feed.xml.
-export function recentUserAgents(limit = 50) {
+// Newest distinct user-agents, most-recently-first-seen first. Backs /feed.xml
+// and sitemap.xml. botsOnly: only crawlers/bots get individually-identifiable
+// public pages (see getUserAgentDetail) — human visitors appear only in the
+// aggregate /stats panels, never as an individually linkable, permanently
+// published entry, per data-minimization (GDPR Art. 5(1)(c)).
+export function recentUserAgents(limit = 50, { botsOnly = false } = {}) {
   return db
     .prepare(
       `SELECT ua_hash, ua, first_seen, last_seen, hits, is_bot, bot_name, browser, os, device
-       FROM user_agents ORDER BY first_seen DESC LIMIT ?`,
+       FROM user_agents ${botsOnly ? 'WHERE is_bot = 1' : ''}
+       ORDER BY first_seen DESC LIMIT ?`,
     )
     .all(Math.min(Math.max(1, limit | 0), 200));
 }
@@ -322,21 +327,28 @@ function computeStats(filter) {
 }
 
 // Delete raw visit rows past the retention window, then hand the freed pages
-// back to the OS. Cheap enough to run on startup and once a day. Returns the
-// number of rows deleted, or null when pruning is disabled.
+// back to the OS. Also drops HUMAN catalogue entries once they've been quiet
+// for the same window — storage-limitation (GDPR Art. 5(1)(e)) applies to
+// identifiable people, not to automated agents, so the crawler catalogue that
+// is this site's actual purpose is kept indefinitely; only bot rows survive.
+// Cheap enough to run on startup and once a day. Returns null when pruning is
+// disabled, else { visits, humanUas } counts deleted.
 export function pruneVisits() {
   if (!Number.isFinite(RETENTION_DAYS) || RETENTION_DAYS <= 0) return null;
 
-  const deleted = db
-    .prepare(`DELETE FROM visits WHERE ts < datetime('now', ?)`)
-    .run(`-${RETENTION_DAYS} days`).changes;
+  const cutoff = `-${RETENTION_DAYS} days`;
+  const visits = db.prepare(`DELETE FROM visits WHERE ts < datetime('now', ?)`).run(cutoff)
+    .changes;
+  const humanUas = db
+    .prepare(`DELETE FROM user_agents WHERE is_bot = 0 AND last_seen < datetime('now', ?)`)
+    .run(cutoff).changes;
 
-  if (deleted > 0) {
+  if (visits > 0 || humanUas > 0) {
     db.exec('PRAGMA incremental_vacuum');
     db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
     statsCache.clear();
   }
-  return deleted;
+  return { visits, humanUas };
 }
 
 export const retentionDays = () => (RETENTION_DAYS > 0 ? RETENTION_DAYS : 0);

@@ -65,11 +65,15 @@ ${refresh ? `<meta http-equiv="refresh" content="${refresh}">` : ''}
 const botTag = (isBot) =>
   isBot ? '<span class="tag bot">BOT</span>' : '<span class="tag human">HUMAN</span>';
 
-// A user-agent string that links to its detail page (/stats/ua/<hash>).
-const uaCell = (hash, ua) =>
-  `<a class="mono-break" href="/stats/ua/${esc(hash)}">${
-    esc(ua) || '<span class="muted">(empty)</span>'
-  }</a>`;
+// A user-agent string. Only bots get an individually-identifiable public detail
+// page (/stats/ua/<hash>) — human entries render as plain text, matching the
+// data-minimization stance explained on /datenschutz.
+const uaCell = (hash, ua, isBot) => {
+  const text = esc(ua) || '<span class="muted">(empty)</span>';
+  return isBot
+    ? `<a class="mono-break" href="/stats/ua/${esc(hash)}">${text}</a>`
+    : `<span class="mono-break">${text}</span>`;
+};
 
 // Canonical public name — shown in every footer regardless of the BASE_URL the
 // container happens to run with (LAN IP during testing, etc.).
@@ -98,7 +102,7 @@ function fingerprintVerdict(parsed, fp) {
     <ul class="muted" style="margin:6px 0 0;padding-left:18px">${reasons}</ul>`;
 }
 
-export function renderIndex({ ua, parsed, fp, headers, ipHashShown, trapLinks }) {
+export function renderIndex({ ua, parsed, fp, headers, ipHashShown, trapLinks, dnt }) {
   const fpRows = [
     ['HTTP version', esc(fp.httpVersion)],
     ['Accept', `<span class="mono-break">${esc(fp.accept || '—')}</span>`],
@@ -153,11 +157,21 @@ export function renderIndex({ ua, parsed, fp, headers, ipHashShown, trapLinks })
 <div class="panel">
   <h2>What happens with this data</h2>
   <p class="muted">
-    Every request to this site stores a row: timestamp, the raw User-Agent string,
-    requested path, referer, Accept-Language and a <em>salted, daily-rotating hash</em>
-    of your IP address (never the address itself). No cookies, no tracking scripts,
-    no third parties. The aggregated result is on the
-    <a href="/stats">statistics page</a>.
+    ${
+      dnt
+        ? `Your browser sent <code>DNT: 1</code> / <code>Sec-GPC: 1</code> — this visit was
+           <strong>not</strong> written to the database. Everything above was still computed
+           just to show it back to you; none of it was stored.`
+        : `Every request to this site stores a row: timestamp, the raw User-Agent string,
+           requested path, the <em>origin only</em> of the referer (never its full path or
+           query string), Accept-Language, and a <em>salted, daily-rotating hash</em> of your
+           IP address (never the address itself). No cookies, no tracking scripts, no third
+           parties. Individual, timestamped request histories are published only for bots and
+           crawlers — human visitors appear only in aggregate on the
+           <a href="/stats">statistics page</a>. Send <code>DNT: 1</code> or
+           <code>Sec-GPC: 1</code> to opt out of storage entirely.`
+    }
+    Full details: <a href="/datenschutz">privacy policy</a>.
   </p>
 </div>
 
@@ -165,6 +179,7 @@ export function renderIndex({ ua, parsed, fp, headers, ipHashShown, trapLinks })
   ${SITE_LINK} &middot; open crawler observatory &middot;
   <a href="/robots.txt">robots.txt</a> &middot; <a href="/sitemap.xml">sitemap.xml</a>
   &middot; <a href="/feed.xml">feed</a> &middot; <a href="/llms.txt">llms.txt</a>
+  &middot; <a href="/datenschutz">privacy</a>
 </footer>
 
 <div class="hp" aria-hidden="true">
@@ -184,7 +199,8 @@ export function renderTrap({ depth, links }) {
   </ul>
   <p class="muted"><a href="/">return to root</a></p>
 </div>
-<footer>${SITE_LINK} &middot; every hit here is recorded as a crawler visit</footer>`;
+<footer>${SITE_LINK} &middot; every hit here is recorded as a crawler visit &middot;
+  <a href="/datenschutz">privacy</a></footer>`;
   return layout(`index node ${depth}`, body);
 }
 
@@ -273,7 +289,7 @@ export function renderStats(s) {
     ${s.topUserAgents
       .map(
         (u) => `<tr>
-      <td>${uaCell(u.ua_hash, u.ua)}</td>
+      <td>${uaCell(u.ua_hash, u.ua, !!u.is_bot)}</td>
       <td>${u.hits.toLocaleString('en')}</td>
       <td>${botTag(!!u.is_bot)}</td>
       <td class="muted">${esc(u.browser || '—')}${u.os ? ' / ' + esc(u.os) : ''}</td>
@@ -321,7 +337,7 @@ ${
     ${s.spoofedUserAgents
       .map(
         (u) => `<tr>
-      <td>${uaCell(u.ua_hash, u.ua)}</td>
+      <td>${uaCell(u.ua_hash, u.ua, false)}</td>
       <td>${u.c.toLocaleString('en')}</td>
       <td>${u.score}</td>
       <td class="muted">${explainCodes(u.reasons).map(esc).join('; ')}</td>
@@ -395,7 +411,7 @@ ${
         (u) => `<tr>
       <td class="muted">${esc(u.first_seen)}</td>
       <td>${botTag(!!u.is_bot)}</td>
-      <td>${uaCell(u.ua_hash, u.ua)}</td>
+      <td>${uaCell(u.ua_hash, u.ua, !!u.is_bot)}</td>
     </tr>`,
       )
       .join('')}
@@ -404,7 +420,8 @@ ${
 </div>
 
 <footer>${SITE_LINK} &middot; data collected since first request &middot;
-  <a href="/feed.xml">feed</a> &middot; <a href="/api/stats">json</a></footer>`;
+  <a href="/feed.xml">feed</a> &middot; <a href="/api/stats">json</a> &middot;
+  <a href="/datenschutz">privacy</a></footer>`;
   return layout('useragents.nichtregistriert.de — statistics', body, { refresh: 30 });
 }
 
@@ -526,17 +543,162 @@ export function renderUaDetail({ detail }) {
   }
 </div>
 
-<footer>${SITE_LINK} &middot; <a href="/stats">all statistics</a></footer>`;
+<footer>${SITE_LINK} &middot; <a href="/stats">all statistics</a> &middot;
+  <a href="/datenschutz">privacy</a></footer>`;
 
   const name = m.bot_name || m.browser || 'unknown';
   return layout(`${name} — user-agent detail`, body);
 }
 
-export function renderNotFound({ path }) {
+export function renderNotFound({ path, dnt }) {
   const body = `
 <header><h1>404</h1><p class="muted">no such resource: ${esc(path)}</p></header>
-<p>This request was still logged. <a href="/">go to the homepage</a> or see the
+<p>${
+    dnt
+      ? 'Your browser opted out (DNT/GPC) — this request was not logged.'
+      : 'This request was still logged.'
+  } <a href="/">go to the homepage</a> or see the
 <a href="/stats">statistics</a>.</p>
-<footer>${SITE_LINK}</footer>`;
+<footer>${SITE_LINK} &middot; <a href="/datenschutz">privacy</a></footer>`;
   return layout('404', body);
+}
+
+export function renderPrivacy({ retentionDays } = {}) {
+  const body = `
+<header>
+  <h1>privacy policy</h1>
+  <p class="muted">Datenschutzerklärung — last updated 2026-09-11</p>
+</header>
+<nav><a href="/">&larr; home</a><a href="/stats">statistics</a></nav>
+
+<div class="panel">
+  <h2>Controller</h2>
+  <p class="muted">
+    [PLACEHOLDER — name, postal address and contact e-mail of the person or
+    entity responsible for this site under Art. 4(7) GDPR go here. This site
+    is not yet legally complete without this section filled in.]
+  </p>
+</div>
+
+<div class="panel">
+  <h2>What is collected, and why</h2>
+  <p class="muted">This site's purpose is to observe and study which automated
+  agents (bots, crawlers, scanners) access it, as a small piece of open security
+  research. Every request — human or automated — is briefly processed to do that:</p>
+  <table><tbody>
+    <tr><th>Timestamp</th><td class="muted">to the second</td></tr>
+    <tr><th>User-Agent string</th><td class="muted">as sent by the client, verbatim</td></tr>
+    <tr><th>Requested path, method, status code</th><td class="muted">e.g. <code>GET /stats 200</code></td></tr>
+    <tr><th>Referer</th><td class="muted"><strong>origin only</strong> (scheme + host) — the
+      path and query string are discarded before anything is stored, since they can carry
+      search terms or tokens that belong to a third-party site</td></tr>
+    <tr><th>Accept-Language</th><td class="muted">as sent by the client</td></tr>
+    <tr><th>Request-header fingerprint</th><td class="muted">whether Accept, Accept-Encoding,
+      Sec-Fetch-*, Sec-CH-UA and the HTTP version are consistent with the claimed browser —
+      see the landing page for what this looks like for your own request</td></tr>
+    <tr><th>IP address</th><td class="muted"><strong>never stored.</strong> It is used only in
+      memory, for the current request, to compute a SHA-256 hash of
+      <code>secret_salt : today's date : ip</code>, truncated to 16 hex characters. The salt
+      is generated once per server install, kept only in the database, and never leaves it —
+      so the hash cannot be reversed back to an IP address, on this site or anywhere else. It
+      changes every day, so the same visitor gets a new hash tomorrow.</td></tr>
+  </tbody></table>
+  <p class="muted">No cookies, no browser storage, no JavaScript, and no third-party
+  scripts, fonts, or requests of any kind are used.</p>
+</div>
+
+<div class="panel">
+  <h2>Legal basis</h2>
+  <p class="muted">Processing relies on <strong>legitimate interest</strong>
+  (Art. 6(1)(f) GDPR): operating and securing a small, self-hosted research
+  service, and studying automated web traffic. This is a narrow interest — no
+  profiles are built across sites, no cookies or persistent identifiers are set
+  in your browser, and raw IP addresses are never retained.</p>
+</div>
+
+<div class="panel">
+  <h2>What is made public</h2>
+  <p class="muted">
+    <a href="/stats">/stats</a> and <a href="/api/stats">/api/stats</a> publish
+    <strong>aggregate</strong> counts and categories — how many requests, bot vs.
+    human, which browsers/OSes/devices, which paths were probed, and so on.
+  </p>
+  <p class="muted">
+    <strong>Individual, timestamped request histories are published only for
+    entries classified as bots or crawlers</strong> (<code>/stats/ua/&lt;hash&gt;</code>,
+    linked from the statistics tables, the <a href="/feed.xml">Atom feed</a> and
+    the sitemap). A human visitor's browser is never given its own public,
+    linkable page — it is only ever reflected in the aggregate counts above.
+    Automated agents are not natural persons and so are outside the scope of
+    GDPR to begin with; this separation exists so publication never turns into
+    a public log of an identifiable person's browsing activity.
+  </p>
+</div>
+
+<div class="panel">
+  <h2>Decoy endpoints</h2>
+  <p class="muted">
+    This server may answer a handful of well-known vulnerability-scanner paths
+    (e.g. <code>/wp-login.php</code>, <code>/.env</code>) with a fake response
+    instead of a 404, to study scanning behaviour. These pages accept no input,
+    have no working form, and their content is entirely fabricated junk — no
+    real system, credentials, or data exist behind them.
+  </p>
+</div>
+
+<div class="panel">
+  <h2>Retention</h2>
+  <p class="muted">
+    ${
+      retentionDays > 0
+        ? `Raw, per-request logs (the table backing the "recent requests" list on a
+           bot's detail page) are deleted after <strong>${retentionDays} days</strong>.
+           Once a human visitor's browser has been quiet for that same window, its
+           aggregate catalogue entry (first/last seen, hit count) is deleted too.`
+        : `Raw, per-request log retention is currently disabled on this instance
+           (records are kept indefinitely) — ask the controller above if you'd like
+           this changed.`
+    }
+    Aggregate history for <em>bots and crawlers</em> is kept indefinitely — that
+    long-term "who crawls the web" record is this project's actual purpose, and
+    bots are not people whose data must age out.
+  </p>
+</div>
+
+<div class="panel">
+  <h2>Do Not Track / Global Privacy Control</h2>
+  <p class="muted">
+    Send the <code>DNT: 1</code> or <code>Sec-GPC: 1</code> header and this site
+    will serve your request normally but <strong>write nothing to its database</strong>
+    — no row, no fingerprint, no contribution to any catalogue entry. Most current
+    browsers can send <code>Sec-GPC</code> via a privacy extension or a built-in
+    setting.
+  </p>
+</div>
+
+<div class="panel">
+  <h2>Your rights</h2>
+  <p class="muted">
+    Under the GDPR you have the right to access, rectify, erase, or restrict
+    processing of your personal data, to object to it, and to data portability,
+    as well as the right to lodge a complaint with a supervisory authority.
+    Because this site stores no cookies, no account, and no raw IP address, it
+    generally cannot look up "your" specific entries on request — if you believe
+    a specific catalogue entry is about you (for instance, an unusually
+    distinctive browser configuration) and want it deleted, contact the
+    controller above with enough detail to identify it (approximate time,
+    browser/OS) and it will be removed.
+  </p>
+</div>
+
+<div class="panel">
+  <h2>Hosting</h2>
+  <p class="muted">
+    This site is self-hosted by the controller above; no data is shared with
+    or processed by any third-party service, analytics provider, or ad network.
+  </p>
+</div>
+
+<footer>${SITE_LINK} &middot; <a href="/">home</a> &middot; <a href="/stats">statistics</a></footer>`;
+  return layout('useragents.nichtregistriert.de — privacy policy', body);
 }

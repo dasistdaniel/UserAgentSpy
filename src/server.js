@@ -15,6 +15,7 @@ import {
   renderUaDetail,
   renderTrap,
   renderNotFound,
+  renderPrivacy,
 } from './views.js';
 import { seedTrapLinks, nextTrapLinks, parseTrapPath } from './honeypot.js';
 import { decoyFor } from './decoys.js';
@@ -29,7 +30,7 @@ const TRUST_PROXY = /^(1|true|yes|on)$/i.test(process.env.TRUST_PROXY || '');
 const FAKE_ENDPOINTS = /^(1|true|yes|on)$/i.test(process.env.FAKE_ENDPOINTS || '');
 
 // Public URLs we advertise in sitemap.xml and push to IndexNow.
-const SITE_PATHS = ['/', '/stats'];
+const SITE_PATHS = ['/', '/stats', '/datenschutz'];
 const INDEXNOW_KEY = indexNowKey();
 
 // Google Search Console file verification: set to the token from the
@@ -63,6 +64,25 @@ function clientIp(req) {
 }
 
 const now = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
+
+// Data minimization: a Referer can carry a search query, an auth token, or
+// another site's internal path in its query string. We only ever need to know
+// *which site* sent a visitor, so only the origin is stored — never the path
+// or query. The visitor still sees their own full, unmodified Referer on `/`.
+function refererOrigin(raw) {
+  if (!raw) return null;
+  try {
+    return new URL(raw).origin.slice(0, 200) || null;
+  } catch {
+    return null;
+  }
+}
+
+// Do Not Track / Global Privacy Control: an explicit, standardised opt-out
+// signal. When set, this visit is served normally but never written to the
+// database — no request-level record, no contribution to the UA catalogue.
+const dntRequested = (req) =>
+  req.headers['dnt'] === '1' || req.headers['sec-gpc'] === '1';
 
 // /stats + /api/stats accept ?filter=bots|humans (anything else => all).
 const statsFilter = (v) => (v === 'bots' || v === 'humans' ? v : 'all');
@@ -99,8 +119,9 @@ function llmsTxt() {
 If you are an automated crawler — including an LLM crawler such as GPTBot,
 ChatGPT-User, OAI-SearchBot, ClaudeBot, Claude-Web, PerplexityBot, CCBot,
 Google-Extended, Bytespider or Amazonbot — your request has just been logged and
-will show up in the public statistics. Nothing here is private: there is no login
-and no personal data, and IP addresses are never stored (only a salted daily hash).
+gets its own public, permanent page (see below). There is no login, no cookies,
+and IP addresses are never stored (only a salted daily hash). Human visitors are
+only ever shown in aggregate — see ${BASE_URL}/datenschutz for the full policy.
 
 ## Pages
 
@@ -110,16 +131,21 @@ and no personal data, and IP addresses are never stored (only a salted daily has
   top user-agents and bots, browsers, OSes, probed paths, response status codes,
   top 404s, 30-day timeline, newest user-agents. Accepts ?filter=bots|humans
 - [Statistics as JSON](${BASE_URL}/api/stats): the same data, CORS-open, honors ?filter=
+- [Privacy policy](${BASE_URL}/datenschutz): what is collected, why, retention,
+  and what is and isn't published
 
 ## Data
 
-- [Atom feed](${BASE_URL}/feed.xml): the newest distinct user-agents seen
+- [Atom feed](${BASE_URL}/feed.xml): the newest bots and crawlers seen, each
+  linking to its own detail page (${BASE_URL}/stats/ua/&lt;hash&gt;)
 - [robots.txt](${BASE_URL}/robots.txt)
 - [sitemap.xml](${BASE_URL}/sitemap.xml)
 
 ## Notes
 
 - Aggregate statistics are free to cite and reuse.
+- Only bot/crawler user-agents get an individual public detail page; human
+  visitors appear only in aggregate counts, never individually.
 - Paths under /trap/ are a honeypot maze marked rel="nofollow"; they hold no real
   content and every hit there is recorded as a crawler visit.
 `;
@@ -136,6 +162,7 @@ const server = http.createServer((req, res) => {
   const ua = req.headers['user-agent'] || '';
   const parsed = parseUA(ua);
   const fp = analyzeRequest(req, parsed);
+  const dnt = dntRequested(req);
 
   let status = 200;
   let source = 'direct';
@@ -156,6 +183,7 @@ const server = http.createServer((req, res) => {
       headers: req.headers,
       ipHashShown: ipHash(clientIp(req)),
       trapLinks: seedTrapLinks(),
+      dnt,
     });
     send(res, 200, bodyOut);
     handled = true;
@@ -163,15 +191,22 @@ const server = http.createServer((req, res) => {
     bodyOut = renderStats(getStats(statsFilter(url.searchParams.get('filter'))));
     send(res, 200, bodyOut);
     handled = true;
+  } else if (pathname === '/datenschutz') {
+    bodyOut = renderPrivacy({ retentionDays: retentionDays() });
+    send(res, 200, bodyOut);
+    handled = true;
   } else if (pathname.startsWith('/stats/ua/')) {
     const hash = pathname.slice('/stats/ua/'.length);
     const detail = /^[0-9a-f]{32}$/.test(hash) ? getUserAgentDetail(hash) : null;
-    if (detail) {
+    // Individually-identifiable public pages exist only for bots/crawlers —
+    // publishing a timestamped request history for a human is exactly the
+    // kind of personal-data exposure GDPR data minimization rules out.
+    if (detail && detail.meta.is_bot) {
       bodyOut = renderUaDetail({ detail });
       send(res, 200, bodyOut);
       handled = true;
     }
-    // else: fall through to the 404 handler
+    // else: fall through to the 404 handler (unseen hash, or a human's hash)
   } else if (pathname === '/api/stats') {
     const data = getStats(statsFilter(url.searchParams.get('filter')));
     send(res, 200, JSON.stringify(data, null, 2), 'application/json; charset=utf-8', {
@@ -190,7 +225,8 @@ const server = http.createServer((req, res) => {
       res,
       200,
       `User-agent: *\nAllow: /\n\nSitemap: ${BASE_URL}/sitemap.xml\n` +
-        `# LLM crawlers: ${BASE_URL}/llms.txt\n`,
+        `# LLM crawlers: ${BASE_URL}/llms.txt\n` +
+        `# Privacy: ${BASE_URL}/datenschutz\n`,
       'text/plain; charset=utf-8',
     );
     handled = true;
@@ -204,7 +240,7 @@ const server = http.createServer((req, res) => {
         `  <url><loc>${BASE_URL}${p}</loc><lastmod>${lastmod}</lastmod>` +
         `<changefreq>daily</changefreq><priority>${p === '/' ? '1.0' : '0.8'}</priority></url>`,
     );
-    for (const u of recentUserAgents(200)) {
+    for (const u of recentUserAgents(200, { botsOnly: true })) {
       urls.push(
         `  <url><loc>${BASE_URL}/stats/ua/${u.ua_hash}</loc>` +
           `<lastmod>${u.last_seen.slice(0, 10)}</lastmod><priority>0.3</priority></url>`,
@@ -221,7 +257,7 @@ const server = http.createServer((req, res) => {
     send(
       res,
       200,
-      renderAtom({ baseUrl: BASE_URL, entries: recentUserAgents(50) }),
+      renderAtom({ baseUrl: BASE_URL, entries: recentUserAgents(50, { botsOnly: true }) }),
       'application/atom+xml; charset=utf-8',
     );
     handled = true;
@@ -255,13 +291,15 @@ const server = http.createServer((req, res) => {
 
   if (!handled) {
     status = 404;
-    bodyOut = renderNotFound({ path: pathname });
+    bodyOut = renderNotFound({ path: pathname, dnt });
     send(res, 404, bodyOut);
   }
 
   // ---- logging --------------------------------------------------------------
   log(req, status, pathname);
-  if (!SKIP_LOG.has(pathname)) {
+  // Do Not Track / Global Privacy Control: honor the opt-out by skipping
+  // storage entirely. The response above was already served normally.
+  if (!SKIP_LOG.has(pathname) && !dnt) {
     try {
       recordVisit({
         ts: now(),
@@ -271,7 +309,7 @@ const server = http.createServer((req, res) => {
         path: pathname.slice(0, 512),
         method: req.method,
         status,
-        referer: (req.headers['referer'] || '').slice(0, 512) || null,
+        referer: refererOrigin(req.headers['referer']),
         acceptLanguage: (req.headers['accept-language'] || '').slice(0, 256) || null,
         ipHash: ipHash(clientIp(req)),
         source,
@@ -300,14 +338,17 @@ server.listen(PORT, HOST, () => {
   setInterval(runPrune, 24 * 60 * 60 * 1000).unref();
 });
 
-// Drop raw visit rows past the retention window; the user_agents catalogue stays.
+// Drop raw visit rows (and quiet human catalogue entries) past the retention
+// window; the bot catalogue — this site's actual purpose — is kept forever.
 function runPrune() {
   try {
-    const n = pruneVisits();
-    if (n === null) {
+    const r = pruneVisits();
+    if (r === null) {
       process.stdout.write('prune: disabled (VISITS_RETENTION_DAYS <= 0)\n');
-    } else if (n > 0) {
-      process.stdout.write(`prune: deleted ${n} visit rows older than ${retentionDays()}d\n`);
+    } else if (r.visits > 0 || r.humanUas > 0) {
+      process.stdout.write(
+        `prune: deleted ${r.visits} visit rows and ${r.humanUas} quiet human user-agents older than ${retentionDays()}d\n`,
+      );
     }
   } catch (err) {
     process.stderr.write(`prune failed: ${err.stack || err}\n`);
