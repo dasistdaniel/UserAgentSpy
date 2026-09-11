@@ -83,7 +83,8 @@ it can't drift out of sync with `VISITS_RETENTION_DAYS`.
   `secret_salt : yyyy-mm-dd : ip` is kept, so the same visitor can be counted once
   per day without the address being recoverable. The salt is random per database
   (in the `meta` table).
-- No cookies, no JS trackers, no third-party requests, no accounts.
+- No cookies, no JS trackers, no third-party requests, no accounts — with one
+  narrow, opt-in exception, see `NOLOG_KEY` below.
 - **`DNT: 1` / `Sec-GPC: 1` is honored as an opt-out**: the request is still served
   normally, but nothing is written to the database — no row, no catalogue entry.
 - **Individually-identifiable public pages exist only for bots.** `/stats/ua/<hash>`,
@@ -101,6 +102,16 @@ it can't drift out of sync with `VISITS_RETENTION_DAYS`.
   to age out under GDPR storage-limitation rules. Freed pages are returned to the
   OS via incremental vacuum; a full `VACUUM` on an existing DB is a one-time manual
   step if you want the file itself to shrink immediately.
+
+### Self-exclusion (`NOLOG_KEY`, off by default)
+
+For the operator's own testing traffic — so it doesn't pollute the statistics.
+Set `NOLOG_KEY` to a random string. Visit any page with `?nolog=<NOLOG_KEY>` once;
+that request is excluded immediately and a long-lived, `HttpOnly`, `Secure`
+(when `BASE_URL` is https) cookie is set so every later request from that browser
+is excluded too, no param needed. `?nolog=off` clears it. The cookie carries no
+information beyond "don't log this browser" and is only ever set for whoever has
+the key. Uses the same skip path as the `DNT`/`Sec-GPC` opt-out below.
 
 ### GDPR
 
@@ -153,6 +164,7 @@ Env vars: `PORT` (7060), `HOST` (0.0.0.0), `DB_PATH` (./data/app.db),
 `BASE_URL` (http://localhost:PORT), `TRUST_PROXY` (false),
 `TRAP_SECRET` (changes the maze token space),
 `INDEXNOW_KEY` (empty — see below), `GOOGLE_VERIFY` (empty — see below),
+`NOLOG_KEY` (empty — see below),
 `VISITS_RETENTION_DAYS` (90 — see below), `FAKE_ENDPOINTS` (off — see below).
 
 ## Deploy with Docker

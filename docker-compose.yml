@@ -25,6 +25,10 @@ services:
       # Fake 200s for scanner probes (/wp-login.php, /.env, …) instead of 404s.
       # More aggressive than the default honeypot stance, so opt-in.
       FAKE_ENDPOINTS: ""
+      # Visit any page with ?nolog=<this> once to stop logging your own browser
+      # (sets a long-lived cookie). Generate one: `openssl rand -hex 16`. Empty
+      # = feature disabled, no cookie is ever set.
+      NOLOG_KEY: ""
     volumes:
       - uaspy-data:/data
     ports:

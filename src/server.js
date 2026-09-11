@@ -39,6 +39,18 @@ const GOOGLE_VERIFY = (process.env.GOOGLE_VERIFY || '')
   .trim()
   .replace(/\.html$/i, '');
 
+// Self-exclusion for the operator's own testing traffic: visiting any page
+// with ?nolog=<NOLOG_KEY> sets a long-lived cookie that skips storage on every
+// later request too; ?nolog=off clears it. Off entirely unless NOLOG_KEY is set.
+const NOLOG_KEY = (process.env.NOLOG_KEY || '').trim();
+const NOLOG_COOKIE = 'uaspy_nolog';
+const cookieOverHttps = BASE_URL.startsWith('https://');
+const nologCookieHeader = (on) =>
+  `${NOLOG_COOKIE}=${on ? '1' : ''}; Path=/; Max-Age=${on ? 31536000 : 0}; HttpOnly; SameSite=Lax` +
+  (cookieOverHttps ? '; Secure' : '');
+const hasNologCookie = (req) =>
+  (req.headers.cookie || '').split(';').some((p) => p.trim() === `${NOLOG_COOKIE}=1`);
+
 initDb(DB_PATH);
 const SALT = getSalt();
 
@@ -162,7 +174,22 @@ const server = http.createServer((req, res) => {
   const ua = req.headers['user-agent'] || '';
   const parsed = parseUA(ua);
   const fp = analyzeRequest(req, parsed);
-  const dnt = dntRequested(req);
+
+  // Whether THIS visit gets written to the database at all: DNT/GPC, or an
+  // operator self-exclusion cookie. res.setHeader() here is picked up by every
+  // later send() call, whichever route matches (writeHead merges queued headers).
+  let excluded = dntRequested(req);
+  if (NOLOG_KEY) {
+    const nolog = url.searchParams.get('nolog');
+    if (nolog === NOLOG_KEY) {
+      res.setHeader('set-cookie', nologCookieHeader(true));
+      excluded = true;
+    } else if (nolog === 'off') {
+      res.setHeader('set-cookie', nologCookieHeader(false));
+    } else if (hasNologCookie(req)) {
+      excluded = true;
+    }
+  }
 
   let status = 200;
   let source = 'direct';
@@ -183,7 +210,7 @@ const server = http.createServer((req, res) => {
       headers: req.headers,
       ipHashShown: ipHash(clientIp(req)),
       trapLinks: seedTrapLinks(),
-      dnt,
+      dnt: excluded,
     });
     send(res, 200, bodyOut);
     handled = true;
@@ -291,7 +318,7 @@ const server = http.createServer((req, res) => {
 
   if (!handled) {
     status = 404;
-    bodyOut = renderNotFound({ path: pathname, dnt });
+    bodyOut = renderNotFound({ path: pathname, dnt: excluded });
     send(res, 404, bodyOut);
   }
 
@@ -299,7 +326,7 @@ const server = http.createServer((req, res) => {
   log(req, status, pathname);
   // Do Not Track / Global Privacy Control: honor the opt-out by skipping
   // storage entirely. The response above was already served normally.
-  if (!SKIP_LOG.has(pathname) && !dnt) {
+  if (!SKIP_LOG.has(pathname) && !excluded) {
     try {
       recordVisit({
         ts: now(),

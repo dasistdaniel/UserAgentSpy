@@ -159,15 +159,16 @@ export function renderIndex({ ua, parsed, fp, headers, ipHashShown, trapLinks, d
   <p class="muted">
     ${
       dnt
-        ? `Your browser sent <code>DNT: 1</code> / <code>Sec-GPC: 1</code> — this visit was
-           <strong>not</strong> written to the database. Everything above was still computed
-           just to show it back to you; none of it was stored.`
+        ? `This visit was <strong>not</strong> written to the database — either your browser
+           sent <code>DNT: 1</code> / <code>Sec-GPC: 1</code>, or a self-exclusion is active.
+           Everything above was still computed just to show it back to you; none of it was
+           stored.`
         : `Every request to this site stores a row: timestamp, the raw User-Agent string,
            requested path, the <em>origin only</em> of the referer (never its full path or
            query string), Accept-Language, and a <em>salted, daily-rotating hash</em> of your
-           IP address (never the address itself). No cookies, no tracking scripts, no third
-           parties. Individual, timestamped request histories are published only for bots and
-           crawlers — human visitors appear only in aggregate on the
+           IP address (never the address itself). No cookies are set for ordinary visitors, no
+           tracking scripts, no third parties. Individual, timestamped request histories are
+           published only for bots and crawlers — human visitors appear only in aggregate on the
            <a href="/stats">statistics page</a>. Send <code>DNT: 1</code> or
            <code>Sec-GPC: 1</code> to opt out of storage entirely.`
     }
@@ -555,7 +556,7 @@ export function renderNotFound({ path, dnt }) {
 <header><h1>404</h1><p class="muted">no such resource: ${esc(path)}</p></header>
 <p>${
     dnt
-      ? 'Your browser opted out (DNT/GPC) — this request was not logged.'
+      ? 'This request was not logged (DNT/GPC or a self-exclusion is active).'
       : 'This request was still logged.'
   } <a href="/">go to the homepage</a> or see the
 <a href="/stats">statistics</a>.</p>
@@ -608,8 +609,10 @@ export function renderPrivacy({ retentionDays } = {}) {
       so the hash cannot be reversed back to an IP address, on this site or anywhere else. It
       changes every day, so the same visitor gets a new hash tomorrow.</td></tr>
   </tbody></table>
-  <p class="muted">No cookies, no browser storage, no JavaScript, and no third-party
-  scripts, fonts, or requests of any kind are used.</p>
+  <p class="muted">No cookies or browser storage are used for ordinary visitors, no
+  JavaScript, and no third-party scripts, fonts, or requests of any kind. The one
+  exception is a self-exclusion cookie the operator can set for their own testing
+  traffic — see "Do Not Track" below.</p>
 </div>
 
 <div class="panel">
@@ -618,7 +621,7 @@ export function renderPrivacy({ retentionDays } = {}) {
   (Art. 6(1)(f) GDPR): operating and securing a small, self-hosted research
   service, and studying automated web traffic. This is a narrow interest — no
   profiles are built across sites, no cookies or persistent identifiers are set
-  in your browser, and raw IP addresses are never retained.</p>
+  in an ordinary visitor's browser, and raw IP addresses are never retained.</p>
 </div>
 
 <div class="panel">
@@ -677,7 +680,11 @@ export function renderPrivacy({ retentionDays } = {}) {
     will serve your request normally but <strong>write nothing to its database</strong>
     — no row, no fingerprint, no contribution to any catalogue entry. Most current
     browsers can send <code>Sec-GPC</code> via a privacy extension or a built-in
-    setting.
+    setting. Separately, the operator can unlock a long-lived, secret-gated
+    <code>HttpOnly</code> cookie on their own browser for the same effect, so their
+    own repeated testing traffic doesn't pollute the statistics — that cookie
+    carries no information beyond "don't log this browser" and is never set for
+    anyone who doesn't have the secret.
   </p>
 </div>
 
