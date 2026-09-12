@@ -1,6 +1,6 @@
-# useragents.spy
+# UserAgentSpy
 
-[![CI](https://github.com/dasistdaniel/useragents.spy/actions/workflows/ci.yml/badge.svg)](https://github.com/dasistdaniel/useragents.spy/actions/workflows/ci.yml)
+[![CI](https://github.com/dasistdaniel/UserAgentSpy/actions/workflows/ci.yml/badge.svg)](https://github.com/dasistdaniel/UserAgentSpy/actions/workflows/ci.yml)
 
 A tiny website that captures the **User-Agent** of every visitor — human or bot —
 shows it back to them, stores it, and builds live statistics about who (and what)
@@ -205,7 +205,7 @@ once the server's stopped (simpler than fighting `getStats()`'s 8s cache).
 On the VPS:
 
 ```bash
-git clone <this-repo> useragents-spy && cd useragents-spy
+git clone https://github.com/dasistdaniel/UserAgentSpy.git && cd UserAgentSpy
 docker compose up -d --build
 ```
 

@@ -1,8 +1,8 @@
 services:
   app:
     build: .
-    image: useragents-spy:latest
-    container_name: useragents-spy
+    image: user-agent-spy:latest
+    container_name: user-agent-spy
     restart: unless-stopped
     environment:
       PORT: "7060"

@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 
 export const MAX_DEPTH = 8;
 const FANOUT = 4;
-const SECRET = process.env.TRAP_SECRET || 'useragents-spy-trap';
+const SECRET = process.env.TRAP_SECRET || 'user-agent-spy-trap';
 
 const tokenAt = (seed, depth, i) =>
   crypto
