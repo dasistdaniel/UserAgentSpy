@@ -29,6 +29,11 @@ services:
       # (sets a long-lived cookie). Generate one: `openssl rand -hex 16`. Empty
       # = feature disabled, no cookie is ever set.
       NOLOG_KEY: ""
+      # Per-IP-hash rate limit: RATE_LIMIT_MAX requests per RATE_LIMIT_WINDOW_S
+      # seconds. Protects against a genuine flood, not ordinary crawler
+      # traffic — keep this generous. 0 disables it.
+      RATE_LIMIT_MAX: "300"
+      RATE_LIMIT_WINDOW_S: "10"
     volumes:
       - uaspy-data:/data
     ports:

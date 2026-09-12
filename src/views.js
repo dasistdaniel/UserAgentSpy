@@ -1,5 +1,7 @@
 // Dependency-free HTML rendering via template literals.
 
+import crypto from 'node:crypto';
+
 import { SPOOF_THRESHOLD, explainCodes } from './fingerprint.js';
 
 export function esc(s) {
@@ -8,7 +10,9 @@ export function esc(s) {
   }[c]));
 }
 
-const CSS = `
+// Served as a real, long-cached stylesheet (see /style.css in server.js)
+// instead of inlined into every response — the browser fetches it once.
+export const CSS = `
 :root{color-scheme:dark}
 *{box-sizing:border-box}
 body{margin:0;background:#0b0e14;color:#c9d1d9;font:14px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
@@ -49,6 +53,10 @@ footer{margin-top:40px;color:#8b949e;font-size:12px}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 `;
 
+// Content-derived cache-buster: /style.css?v=<hash> can be cached "forever"
+// since any CSS change produces a new URL, no stale-stylesheet risk.
+export const CSS_VERSION = crypto.createHash('sha256').update(CSS).digest('hex').slice(0, 10);
+
 function layout(title, body, { refresh = 0, description = '' } = {}) {
   return `<!doctype html>
 <html lang="en">
@@ -58,8 +66,8 @@ function layout(title, body, { refresh = 0, description = '' } = {}) {
 ${description ? `<meta name="description" content="${esc(description)}">` : ''}
 ${refresh ? `<meta http-equiv="refresh" content="${refresh}">` : ''}
 <link rel="alternate" type="application/atom+xml" title="newest user-agents" href="/feed.xml">
+<link rel="stylesheet" href="/style.css?v=${CSS_VERSION}">
 <title>${esc(title)}</title>
-<style>${CSS}</style>
 </head>
 <body><main class="wrap">${body}</main></body>
 </html>`;
@@ -237,8 +245,21 @@ export function renderStats(s) {
   const humanVisits = t.visits - t.bot_visits;
   const pct = t.visits ? ((t.bot_visits / t.visits) * 100).toFixed(1) : '0.0';
   const f = s.filter || 'all';
-  const filterLink = (key, label, href) =>
-    `<a href="${href}"${f === key ? ' class="on"' : ''}>${label}</a>`;
+  const r = s.range || 'all';
+
+  // Every link needs to carry whichever of filter/range isn't being changed.
+  const qs = (over = {}) => {
+    const ff = over.filter ?? f;
+    const rr = over.range ?? r;
+    const parts = [];
+    if (ff !== 'all') parts.push(`filter=${ff}`);
+    if (rr !== 'all') parts.push(`range=${rr}`);
+    return parts.length ? `?${parts.join('&')}` : '';
+  };
+  const filterLink = (key, label) =>
+    `<a href="/stats${qs({ filter: key })}"${f === key ? ' class="on"' : ''}>${label}</a>`;
+  const rangeLink = (key, label) =>
+    `<a href="/stats${qs({ range: key })}"${r === key ? ' class="on"' : ''}>${label}</a>`;
 
   const maxDay = Math.max(1, ...s.daily.map((d) => d.c));
   const spark = s.daily
@@ -257,16 +278,21 @@ export function renderStats(s) {
   <h1>statistics</h1>
   <p class="muted">generated ${esc(s.generatedAt)} · auto-refresh 30s${
     f === 'all' ? '' : ` · showing <strong>${f}</strong> only`
-  }</p>
+  }${r === 'all' ? '' : ` · last <strong>${r}</strong>`}</p>
 </header>
-<nav><a href="/">&larr; home</a><a href="/api/stats${
-  f === 'all' ? '' : '?filter=' + f
-}">json</a></nav>
+<nav><a href="/">&larr; home</a><a href="/api/stats${qs()}">json</a></nav>
 <div class="filters">
   <span class="muted">filter:</span>
-  ${filterLink('all', 'all', '/stats')}
-  ${filterLink('humans', 'humans', '/stats?filter=humans')}
-  ${filterLink('bots', 'bots', '/stats?filter=bots')}
+  ${filterLink('all', 'all')}
+  ${filterLink('humans', 'humans')}
+  ${filterLink('bots', 'bots')}
+</div>
+<div class="filters">
+  <span class="muted">range:</span>
+  ${rangeLink('all', 'all time')}
+  ${rangeLink('24h', '24h')}
+  ${rangeLink('7d', '7d')}
+  ${rangeLink('30d', '30d')}
 </div>
 
 <div class="cards">
@@ -287,7 +313,7 @@ export function renderStats(s) {
 </div>
 
 <div class="panel">
-  <h2>requests per day (last 30d${f === 'all' ? ', red = bots' : ''})</h2>
+  <h2>requests per day (last ${r === 'all' ? '30d' : r}${f === 'all' ? ', red = bots' : ''})</h2>
   ${s.daily.length ? `<div class="spark">${spark}</div>` : '<p class="muted">no data yet</p>'}
 </div>
 

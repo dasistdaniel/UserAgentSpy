@@ -16,6 +16,7 @@ import {
   renderTrap,
   renderNotFound,
   renderPrivacy,
+  CSS,
 } from './views.js';
 import { seedTrapLinks, nextTrapLinks, parseTrapPath } from './honeypot.js';
 import { decoyFor } from './decoys.js';
@@ -77,6 +78,31 @@ function clientIp(req) {
 
 const now = () => new Date().toISOString().slice(0, 19).replace('T', ' ');
 
+// Rate limiting: a fixed window per (daily-rotating) IP hash. This protects
+// the small self-hosted server from a genuine flood — NOT from ordinary heavy
+// crawler traffic, which is the entire point of this site — so the default is
+// deliberately generous (well above what real crawlers sustain against one
+// small site). 0 or a negative RATE_LIMIT_MAX disables it entirely.
+const RATE_LIMIT_MAX = Number(process.env.RATE_LIMIT_MAX ?? 300);
+const RATE_LIMIT_WINDOW_MS = Math.max(1, Number(process.env.RATE_LIMIT_WINDOW_S ?? 10)) * 1000;
+const rateBuckets = new Map(); // ipHash -> { count, windowStart }
+// Fixed windows accumulate one entry per distinct daily ip_hash seen; since
+// the hash itself rotates every day anyway, a full clear once an hour keeps
+// this bounded without needing per-entry expiry bookkeeping.
+setInterval(() => rateBuckets.clear(), 60 * 60 * 1000).unref();
+
+function isRateLimited(hash) {
+  if (!hash || RATE_LIMIT_MAX <= 0) return false;
+  const t = Date.now();
+  const bucket = rateBuckets.get(hash);
+  if (!bucket || t - bucket.windowStart >= RATE_LIMIT_WINDOW_MS) {
+    rateBuckets.set(hash, { count: 1, windowStart: t });
+    return false;
+  }
+  bucket.count += 1;
+  return bucket.count > RATE_LIMIT_MAX;
+}
+
 // Data minimization: a Referer can carry a search query, an auth token, or
 // another site's internal path in its query string. We only ever need to know
 // *which site* sent a visitor, so only the origin is stored — never the path
@@ -98,9 +124,11 @@ const dntRequested = (req) =>
 
 // /stats + /api/stats accept ?filter=bots|humans (anything else => all).
 const statsFilter = (v) => (v === 'bots' || v === 'humans' ? v : 'all');
+// ...and ?range=24h|7d|30d (anything else, including omitted => all-time).
+const statsRange = (v) => (['24h', '7d', '30d'].includes(v) ? v : 'all');
 
 // Paths we serve but do NOT want polluting the visit log.
-const SKIP_LOG = new Set(['/api/stats', '/healthz', '/favicon.ico']);
+const SKIP_LOG = new Set(['/api/stats', '/healthz', '/favicon.ico', '/style.css']);
 
 function send(res, status, body, type = 'text/html; charset=utf-8', extra = {}) {
   res.writeHead(status, {
@@ -171,6 +199,14 @@ const server = http.createServer((req, res) => {
     return send(res, 400, 'bad request', 'text/plain');
   }
   const pathname = decodeURIComponent(url.pathname).replace(/\/{2,}/g, '/');
+
+  if (isRateLimited(ipHash(clientIp(req)))) {
+    log(req, 429, pathname);
+    return send(res, 429, 'too many requests\n', 'text/plain', {
+      'retry-after': String(RATE_LIMIT_WINDOW_MS / 1000),
+    });
+  }
+
   const ua = req.headers['user-agent'] || '';
   const parsed = parseUA(ua);
   const fp = analyzeRequest(req, parsed);
@@ -215,7 +251,9 @@ const server = http.createServer((req, res) => {
     send(res, 200, bodyOut);
     handled = true;
   } else if (pathname === '/stats') {
-    bodyOut = renderStats(getStats(statsFilter(url.searchParams.get('filter'))));
+    bodyOut = renderStats(
+      getStats(statsFilter(url.searchParams.get('filter')), statsRange(url.searchParams.get('range'))),
+    );
     send(res, 200, bodyOut);
     handled = true;
   } else if (pathname === '/datenschutz') {
@@ -235,7 +273,10 @@ const server = http.createServer((req, res) => {
     }
     // else: fall through to the 404 handler (unseen hash, or a human's hash)
   } else if (pathname === '/api/stats') {
-    const data = getStats(statsFilter(url.searchParams.get('filter')));
+    const data = getStats(
+      statsFilter(url.searchParams.get('filter')),
+      statsRange(url.searchParams.get('range')),
+    );
     send(res, 200, JSON.stringify(data, null, 2), 'application/json; charset=utf-8', {
       'access-control-allow-origin': '*',
     });
@@ -246,6 +287,13 @@ const server = http.createServer((req, res) => {
   } else if (pathname === '/favicon.ico') {
     status = 204;
     send(res, 204, '');
+    handled = true;
+  } else if (pathname === '/style.css') {
+    // URL is versioned by content hash (see CSS_VERSION in views.js), so this
+    // is safe to cache "forever" — a CSS change ships under a new URL.
+    send(res, 200, CSS, 'text/css; charset=utf-8', {
+      'cache-control': 'public, max-age=31536000, immutable',
+    });
     handled = true;
   } else if (pathname === '/robots.txt') {
     send(

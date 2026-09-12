@@ -225,42 +225,75 @@ export function getUserAgentDetail(hash) {
 // seconds of staleness on a dashboard is fine; TTL wins over write-invalidation
 // because under a bot flood we specifically want the cache to hold.
 const STATS_TTL_MS = 8000;
-const statsCache = new Map(); // filter -> { at, data }
+const statsCache = new Map(); // "filter:range" -> { at, data }
+
+const VALID_RANGES = new Set(['24h', '7d', '30d', 'all']);
+
+// SQL time predicate for one column, or null for 'all' / unrecognized.
+function timeClause(range, col) {
+  if (range === '24h') return `${col} >= datetime('now','-1 day')`;
+  if (range === '7d') return `${col} >= datetime('now','-7 day')`;
+  if (range === '30d') return `${col} >= datetime('now','-30 day')`;
+  return null;
+}
 
 // filter: 'all' | 'bots' | 'humans' — narrows every per-visit / per-UA panel.
-// The totals block always stays global (it's the overview).
-export function getStats(filter = 'all') {
-  const key = filter === 'bots' || filter === 'humans' ? filter : 'all';
+// range: '24h' | '7d' | '30d' | 'all' — same, scoped by time (first_seen for
+// UA-catalogue panels, ts for everything else). Totals stay global on
+// bot/human, but DO respect the time range.
+export function getStats(filter = 'all', range = 'all') {
+  const key = `${filter === 'bots' || filter === 'humans' ? filter : 'all'}:${
+    VALID_RANGES.has(range) ? range : 'all'
+  }`;
   const hit = statsCache.get(key);
   if (hit && Date.now() - hit.at < STATS_TTL_MS) return hit.data;
 
-  const data = computeStats(key);
+  const [f, r] = key.split(':');
+  const data = computeStats(f, r);
   statsCache.set(key, { at: Date.now(), data });
   return data;
 }
 
-function computeStats(filter) {
+function computeStats(filter, range) {
   const all = (sql, ...a) => db.prepare(sql).all(...a);
   const one = (sql, ...a) => db.prepare(sql).get(...a);
 
   const bot = filter === 'bots' ? 1 : filter === 'humans' ? 0 : null;
-  const vWhere = bot === null ? '' : `WHERE is_bot = ${bot}`;
-  const vAnd = bot === null ? '' : `AND is_bot = ${bot}`;
+  const tsRange = timeClause(range, 'ts');
+  const fsRange = timeClause(range, 'first_seen');
+  const tsRangeAnd = tsRange ? `AND ${tsRange}` : '';
+
+  // visits-table condition (bot filter + time range on ts)
+  const vConds = [];
+  if (bot !== null) vConds.push(`is_bot = ${bot}`);
+  if (tsRange) vConds.push(tsRange);
+  const vWhere = vConds.length ? `WHERE ${vConds.join(' AND ')}` : '';
+  const vAnd = vConds.length ? `AND ${vConds.join(' AND ')}` : '';
+
+  // user_agents-table condition (bot filter + time range on first_seen) —
+  // separate from vWhere/vAnd since that table has no ts column.
+  const uaConds = [];
+  if (bot !== null) uaConds.push(`is_bot = ${bot}`);
+  if (fsRange) uaConds.push(fsRange);
+  const uaWhere = uaConds.length ? `WHERE ${uaConds.join(' AND ')}` : '';
 
   const totals = one(`
     SELECT
-      (SELECT COUNT(*) FROM visits)                                   AS visits,
-      (SELECT COUNT(*) FROM user_agents)                              AS uas,
-      (SELECT COUNT(*) FROM visits      WHERE is_bot = 1)             AS bot_visits,
-      (SELECT COUNT(*) FROM user_agents WHERE is_bot = 1)             AS bot_uas,
-      (SELECT COUNT(*) FROM visits WHERE source = 'honeypot')         AS honeypot_hits,
-      (SELECT COUNT(*) FROM visits WHERE source = 'decoy')            AS decoy_hits,
+      (SELECT COUNT(*) FROM visits WHERE 1=1 ${tsRangeAnd})                AS visits,
+      (SELECT COUNT(*) FROM user_agents WHERE 1=1 ${fsRange ? `AND ${fsRange}` : ''})
+                                                                     AS uas,
+      (SELECT COUNT(*) FROM visits      WHERE is_bot = 1 ${tsRangeAnd})    AS bot_visits,
+      (SELECT COUNT(*) FROM user_agents WHERE is_bot = 1 ${fsRange ? `AND ${fsRange}` : ''})
+                                                                     AS bot_uas,
+      (SELECT COUNT(*) FROM visits WHERE source = 'honeypot' ${tsRangeAnd}) AS honeypot_hits,
+      (SELECT COUNT(*) FROM visits WHERE source = 'decoy' ${tsRangeAnd})    AS decoy_hits,
       (SELECT COUNT(*) FROM visits WHERE ts >= datetime('now','-1 day'))  AS last24h,
       (SELECT COUNT(*) FROM visits WHERE ts >= datetime('now','-7 day'))  AS last7d,
-      (SELECT COUNT(*) FROM visits WHERE spoof_score >= ${SPOOF_THRESHOLD} AND is_bot = 0)
+      (SELECT COUNT(*) FROM visits WHERE spoof_score >= ${SPOOF_THRESHOLD} AND is_bot = 0 ${tsRangeAnd})
                                                                      AS spoofed_visits,
       (SELECT COUNT(DISTINCT ua_hash) FROM visits
-         WHERE spoof_score >= ${SPOOF_THRESHOLD} AND is_bot = 0)      AS spoofed_uas
+         WHERE spoof_score >= ${SPOOF_THRESHOLD} AND is_bot = 0 ${tsRangeAnd})
+                                                                     AS spoofed_uas
   `);
 
   // Client-Hints adoption among visits that claim a Chromium browser.
@@ -272,11 +305,13 @@ function computeStats(filter) {
     WHERE is_bot = 0
       AND browser IN ('Chrome','Microsoft Edge','Opera','Vivaldi',
                       'Samsung Internet','Yandex Browser','UC Browser')
+      ${tsRangeAnd}
   `);
 
   return {
     generatedAt: new Date().toISOString(),
     filter,
+    range,
     totals,
     clientHints,
     spoofedUserAgents: all(`
@@ -284,17 +319,17 @@ function computeStats(filter) {
              COUNT(*) AS c, MAX(spoof_score) AS score,
              MAX(spoof_reasons) AS reasons, MAX(ts) AS last_seen
       FROM visits
-      WHERE spoof_score >= ${SPOOF_THRESHOLD} AND is_bot = 0
+      WHERE spoof_score >= ${SPOOF_THRESHOLD} AND is_bot = 0 ${tsRangeAnd}
       GROUP BY ua_hash ORDER BY c DESC, score DESC LIMIT 15`),
     topUserAgents: all(`
       SELECT ua_hash, ua, hits, is_bot, bot_name, browser, os, device, last_seen
-      FROM user_agents ${vWhere} ORDER BY hits DESC, last_seen DESC LIMIT 30`),
+      FROM user_agents ${uaWhere} ORDER BY hits DESC, last_seen DESC LIMIT 30`),
     newestUserAgents: all(`
       SELECT ua_hash, ua, first_seen, is_bot, bot_name, browser, os
-      FROM user_agents ${vWhere} ORDER BY first_seen DESC LIMIT 15`),
+      FROM user_agents ${uaWhere} ORDER BY first_seen DESC LIMIT 15`),
     topBots: all(`
       SELECT COALESCE(NULLIF(bot_name,''), ua) AS name, COUNT(*) AS c
-      FROM visits WHERE is_bot = 1
+      FROM visits WHERE is_bot = 1 ${tsRangeAnd}
       GROUP BY name ORDER BY c DESC LIMIT 20`),
     browsers: all(`
       SELECT COALESCE(browser,'Unknown') AS name, COUNT(*) AS c
@@ -319,9 +354,12 @@ function computeStats(filter) {
       SELECT path, COUNT(*) AS c, SUM(is_bot) AS bots
       FROM visits WHERE source = 'decoy' ${vAnd}
       GROUP BY path ORDER BY c DESC LIMIT 20`),
+    // Uses the selected range as its window when one is picked; defaults to
+    // 30 days for 'all' (an unbounded daily chart isn't useful past that).
     daily: all(`
       SELECT substr(ts,1,10) AS day, COUNT(*) AS c, SUM(is_bot) AS bots
-      FROM visits WHERE ts >= datetime('now','-30 day') ${vAnd}
+      FROM visits WHERE ${tsRange || "ts >= datetime('now','-30 day')"}
+        ${bot !== null ? `AND is_bot = ${bot}` : ''}
       GROUP BY day ORDER BY day`),
   };
 }

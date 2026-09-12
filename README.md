@@ -11,9 +11,10 @@ Target deployment: `https://useragents.nichtregistriert.de` (Docker on a VPS).
 | Route | Purpose |
 | --- | --- |
 | `GET /` | Shows your raw User-Agent + what the server parsed from it (browser, OS, device, bot?) **plus a header fingerprint** — whether `Accept`, `Accept-Encoding`, `Sec-Fetch-*`, `Sec-CH-UA` and the HTTP version match the browser the UA claims to be. Records the visit. |
-| `GET /stats` | Live dashboard: totals, bot vs human, spoofed-browser hits, top user-agents, header-fingerprint mismatches, browsers, OSes, devices, probed paths, response status codes, top 404s, 30-day timeline, newest UAs. Auto-refreshes every 30 s. `?filter=bots` / `?filter=humans` narrows every panel below the totals. |
+| `GET /stats` | Live dashboard: totals, bot vs human, spoofed-browser hits, top user-agents, header-fingerprint mismatches, browsers, OSes, devices, probed paths, response status codes, top 404s, 30-day timeline, newest UAs. Auto-refreshes every 30 s. `?filter=bots\|humans` narrows every panel below the totals; `?range=24h\|7d\|30d` scopes everything (including totals) to that window — omit either for all-time/all. |
 | `GET /stats/ua/<hash>` | Detail page for one **bot/crawler** user-agent (by its `ua_hash`): parsed info, first/last seen, honeypot depth walked, decoy hits, fingerprint verdict, per-day activity, paths requested, recent requests. 404s for human UAs — see [Data & privacy](#data--privacy). Linked from bot rows in the `/stats` tables and from the feed. |
-| `GET /api/stats` | Same data as JSON (CORS-open). Honors the same `?filter=`. |
+| `GET /api/stats` | Same data as JSON (CORS-open). Honors the same `?filter=` and `?range=`. |
+| `GET /style.css` | The stylesheet, versioned (`?v=<content-hash>`) and cached "forever" (`Cache-Control: immutable`) — a code change ships under a new URL, so there's no stale-CSS risk. |
 | `GET /feed.xml` | Atom feed of the 50 newest **bot/crawler** user-agents (one `<entry>` each, linking to its detail page). Advertised via `<link rel="alternate">` in every page head. |
 | `GET /llms.txt` | [llmstxt.org](https://llmstxt.org/) map of the site for LLM crawlers — blurb + links to the pages and data. Pointed at from `robots.txt`. |
 | `GET /robots.txt` | Allows everything, points crawlers at the sitemap, `/llms.txt` and `/datenschutz`. |
@@ -66,6 +67,17 @@ When you add the property in Search Console, pick the HTML-file method and set
 (the `.html` suffix is optional). The server then answers
 `GET /googleXXXX.html` with `google-site-verification: googleXXXX.html`.
 After it verifies, submit `https://useragents.nichtregistriert.de/sitemap.xml`.
+
+### Rate limiting
+
+A fixed window per (daily-rotating) IP hash — `RATE_LIMIT_MAX` requests
+(default **300**) per `RATE_LIMIT_WINDOW_S` seconds (default **10**), i.e. 30
+req/s sustained by default. This exists to protect the small self-hosted
+server from a genuine flood, not to throttle ordinary crawler traffic — which
+is the whole point of the site — so the default is deliberately generous, well
+above what a real crawler sustains against one small site. Excess requests get
+a `429` with `Retry-After` and are **not** written to the database, so a flood
+can't grow the DB either. Set `RATE_LIMIT_MAX` to `0` to disable entirely.
 
 ## Data & privacy
 
@@ -165,7 +177,8 @@ Env vars: `PORT` (7060), `HOST` (0.0.0.0), `DB_PATH` (./data/app.db),
 `TRAP_SECRET` (changes the maze token space),
 `INDEXNOW_KEY` (empty — see below), `GOOGLE_VERIFY` (empty — see below),
 `NOLOG_KEY` (empty — see below),
-`VISITS_RETENTION_DAYS` (90 — see below), `FAKE_ENDPOINTS` (off — see below).
+`VISITS_RETENTION_DAYS` (90 — see below), `FAKE_ENDPOINTS` (off — see below),
+`RATE_LIMIT_MAX` (300 — see below), `RATE_LIMIT_WINDOW_S` (10 — see below).
 
 ## Deploy with Docker
 
@@ -255,7 +268,7 @@ src/
   decoys.js      fake 200s for scanner probes (opt-in via FAKE_ENDPOINTS)
   ua.js          dependency-free User-Agent parser + bot detection
   fingerprint.js header-fingerprint analysis + spoof score
-  views.js       HTML rendering (inline CSS, dark theme)
+  views.js       HTML rendering + the CSS (served via /style.css, dark theme)
   honeypot.js    bounded crawler-maze link generation
   indexnow.js    IndexNow ping (Bing + Yandex)
 Dockerfile          node:24-alpine, runs as non-root
