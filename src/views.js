@@ -49,12 +49,13 @@ footer{margin-top:40px;color:#8b949e;font-size:12px}
 .hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
 `;
 
-function layout(title, body, { refresh = 0 } = {}) {
+function layout(title, body, { refresh = 0, description = '' } = {}) {
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+${description ? `<meta name="description" content="${esc(description)}">` : ''}
 ${refresh ? `<meta http-equiv="refresh" content="${refresh}">` : ''}
 <link rel="alternate" type="application/atom+xml" title="newest user-agents" href="/feed.xml">
 <title>${esc(title)}</title>
@@ -188,7 +189,11 @@ export function renderIndex({ ua, parsed, fp, headers, ipHashShown, trapLinks, d
 <div class="hp" aria-hidden="true">
   ${trapLinks.map((h, i) => `<a href="${esc(h)}" rel="nofollow" tabindex="-1">catalogue entry ${i + 1}</a>`).join('')}
 </div>`;
-  return layout('useragents.nichtregistriert.de — your User-Agent, logged', body);
+  return layout('useragents.nichtregistriert.de — your User-Agent, logged', body, {
+    description:
+      'See your own User-Agent, the browser/OS/device parsed from it, and a ' +
+      'header-fingerprint check for whether your request matches the browser it claims.',
+  });
 }
 
 export function renderTrap({ depth, links }) {
@@ -204,7 +209,9 @@ export function renderTrap({ depth, links }) {
 </div>
 <footer>${SITE_LINK} &middot; every hit here is recorded as a crawler visit &middot;
   <a href="/datenschutz">privacy</a></footer>`;
-  return layout(`index node ${depth}`, body);
+  return layout(`index node ${depth}`, body, {
+    description: 'Auto-generated honeypot catalogue page used to identify web crawlers.',
+  });
 }
 
 function barList(items, opts = {}) {
@@ -425,7 +432,12 @@ ${
 <footer>${SITE_LINK} &middot; data collected since first request &middot;
   <a href="/feed.xml">feed</a> &middot; <a href="/api/stats">json</a> &middot;
   <a href="/datenschutz">privacy</a></footer>`;
-  return layout('useragents.nichtregistriert.de — statistics', body, { refresh: 30 });
+  return layout('useragents.nichtregistriert.de — statistics', body, {
+    refresh: 30,
+    description:
+      'Live dashboard of who and what crawls this site: bot vs human traffic, top ' +
+      'user-agents and bots, browsers, OSes, probed paths and response codes.',
+  });
 }
 
 export function renderUaDetail({ detail }) {
@@ -550,7 +562,11 @@ export function renderUaDetail({ detail }) {
   <a href="/datenschutz">privacy</a></footer>`;
 
   const name = m.bot_name || m.browser || 'unknown';
-  return layout(`${name} — user-agent detail`, body);
+  return layout(`${name} — user-agent detail`, body, {
+    description:
+      `First/last seen, request history, header-fingerprint verdict and honeypot ` +
+      `activity for the ${name} crawler on useragents.nichtregistriert.de.`,
+  });
 }
 
 export function renderNotFound({ path, dnt }) {
@@ -563,7 +579,9 @@ export function renderNotFound({ path, dnt }) {
   } <a href="/">go to the homepage</a> or see the
 <a href="/stats">statistics</a>.</p>
 <footer>${SITE_LINK} &middot; <a href="/datenschutz">privacy</a></footer>`;
-  return layout('404', body);
+  return layout('404', body, {
+    description: 'Page not found on useragents.nichtregistriert.de.',
+  });
 }
 
 export function renderPrivacy({ retentionDays } = {}) {
@@ -714,5 +732,9 @@ export function renderPrivacy({ retentionDays } = {}) {
 </div>
 
 <footer>${SITE_LINK} &middot; <a href="/">home</a> &middot; <a href="/stats">statistics</a></footer>`;
-  return layout('useragents.nichtregistriert.de — privacy policy', body);
+  return layout('useragents.nichtregistriert.de — privacy policy', body, {
+    description:
+      'What useragents.nichtregistriert.de collects, why, how long it is kept, ' +
+      'what is published, and your rights under the GDPR.',
+  });
 }
