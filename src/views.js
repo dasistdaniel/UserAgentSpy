@@ -101,6 +101,7 @@ const uaCell = (hash, ua, isBot) => {
 // container happens to run with (LAN IP during testing, etc.).
 const SITE = 'useragents.nichtregistriert.de';
 const SITE_LINK = `<a href="https://${SITE}">${SITE}</a>`;
+const GITHUB_LINK = '<a href="https://github.com/dasistdaniel/UserAgentSpy">source</a>';
 
 const STATUS_TEXT = {
   200: 'OK',
@@ -202,7 +203,7 @@ export function renderIndex({ ua, parsed, fp, headers, ipHashShown, trapLinks, d
   ${SITE_LINK} &middot; open crawler observatory &middot;
   <a href="/robots.txt">robots.txt</a> &middot; <a href="/sitemap.xml">sitemap.xml</a>
   &middot; <a href="/feed.xml">feed</a> &middot; <a href="/llms.txt">llms.txt</a>
-  &middot; <a href="/datenschutz">privacy</a>
+  &middot; <a href="/datenschutz">privacy</a> &middot; ${GITHUB_LINK}
 </footer>
 
 <div class="hp" aria-hidden="true">
@@ -228,7 +229,7 @@ export function renderTrap({ depth, links }) {
   <p class="muted"><a href="/">return to root</a></p>
 </div>
 <footer>${SITE_LINK} &middot; every hit here is recorded as a crawler visit &middot;
-  <a href="/datenschutz">privacy</a></footer>`;
+  <a href="/datenschutz">privacy</a> &middot; ${GITHUB_LINK}</footer>`;
   return layout(`index node ${depth}`, body, {
     description: 'Auto-generated honeypot catalogue page used to identify web crawlers.',
   });
@@ -469,7 +470,7 @@ ${
 
 <footer>${SITE_LINK} &middot; data collected since first request &middot;
   <a href="/feed.xml">feed</a> &middot; <a href="/api/stats">json</a> &middot;
-  <a href="/datenschutz">privacy</a></footer>`;
+  <a href="/datenschutz">privacy</a> &middot; ${GITHUB_LINK}</footer>`;
   return layout('useragents.nichtregistriert.de — statistics', body, {
     refresh: 30,
     description:
@@ -600,7 +601,7 @@ export function renderUaDetail({ detail }) {
 </div>
 
 <footer>${SITE_LINK} &middot; <a href="/stats">all statistics</a> &middot;
-  <a href="/datenschutz">privacy</a></footer>`;
+  <a href="/datenschutz">privacy</a> &middot; ${GITHUB_LINK}</footer>`;
 
   const name = m.bot_name || m.browser || 'unknown';
   return layout(`${name} — user-agent detail`, body, {
@@ -620,7 +621,7 @@ export function renderNotFound({ path, dnt }) {
       : 'This request was still logged.'
   } <a href="/">go to the homepage</a> or see the
 <a href="/stats">statistics</a>.</p>
-<footer>${SITE_LINK} &middot; <a href="/datenschutz">privacy</a></footer>`;
+<footer>${SITE_LINK} &middot; <a href="/datenschutz">privacy</a> &middot; ${GITHUB_LINK}</footer>`;
   return layout('404', body, {
     description: 'Page not found on useragents.nichtregistriert.de.',
   });
@@ -773,7 +774,8 @@ export function renderPrivacy({ retentionDays } = {}) {
   </p>
 </div>
 
-<footer>${SITE_LINK} &middot; <a href="/">home</a> &middot; <a href="/stats">statistics</a></footer>`;
+<footer>${SITE_LINK} &middot; <a href="/">home</a> &middot; <a href="/stats">statistics</a>
+  &middot; ${GITHUB_LINK}</footer>`;
   return layout('useragents.nichtregistriert.de — privacy policy', body, {
     description:
       'What useragents.nichtregistriert.de collects, why, how long it is kept, ' +
