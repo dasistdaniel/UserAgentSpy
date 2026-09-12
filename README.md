@@ -1,5 +1,7 @@
 # useragents.spy
 
+[![CI](https://github.com/dasistdaniel/useragents.spy/actions/workflows/ci.yml/badge.svg)](https://github.com/dasistdaniel/useragents.spy/actions/workflows/ci.yml)
+
 A tiny website that captures the **User-Agent** of every visitor — human or bot —
 shows it back to them, stores it, and builds live statistics about who (and what)
 crawls the web.

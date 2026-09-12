@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 22.5.0 is the floor declared in package.json engines (needed for
+        # node:sqlite); 24 matches the node:24-alpine image this actually
+        # deploys with.
+        node-version: ['22.5.0', '24']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      # Zero dependencies — no npm install/ci step needed.
+      - name: Syntax-check every source file
+        run: for f in src/*.js; do node --check "$f"; done
+
+      - name: Run tests
+        run: npm test
