@@ -194,7 +194,7 @@ volume `uaspy-data` (`/data/app.db`).
 
 `docker-compose.yml` currently ships a **direct-test** configuration: port
 `7060` on all interfaces, `TRUST_PROXY=false`,
-`BASE_URL=http://192.168.178.20:7060`. Test with
+`BASE_URL=http://<your-host-ip>:7060`. Test with
 `curl http://<host>:7060/` and open `/stats` in a browser.
 
 When the domain goes live, edit `docker-compose.yml`:

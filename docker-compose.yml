@@ -10,9 +10,9 @@ services:
       # Direct test without a reverse proxy: don't trust forwarded headers,
       # use the real socket IP. Flip to "true" once a proxy sits in front.
       TRUST_PROXY: "false"
-      # Test value; change to https://useragents.nichtregistriert.de when the
-      # domain + proxy are live (affects robots.txt / sitemap.xml / footer links).
-      BASE_URL: http://192.168.178.20:7060
+      # Test value; change to your real https://your-domain when the domain +
+      # proxy are live (affects robots.txt / sitemap.xml / footer links).
+      BASE_URL: http://<your-host-ip>:7060
       # IndexNow key: pings Bing + Yandex to crawl our URLs (once/day, only on an
       # https BASE_URL). Generate one: `openssl rand -hex 16`. Leave empty to disable.
       INDEXNOW_KEY: ""
