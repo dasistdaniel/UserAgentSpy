@@ -77,7 +77,9 @@ server from a genuine flood, not to throttle ordinary crawler traffic — which
 is the whole point of the site — so the default is deliberately generous, well
 above what a real crawler sustains against one small site. Excess requests get
 a `429` with `Retry-After` and are **not** written to the database, so a flood
-can't grow the DB either. Set `RATE_LIMIT_MAX` to `0` to disable entirely.
+can't grow the DB either. `/healthz` is always exempt, so Docker's own
+`HEALTHCHECK` (or any uptime monitor) can never lock itself out. Set
+`RATE_LIMIT_MAX` to `0` to disable entirely.
 
 ## Data & privacy
 
@@ -180,6 +182,20 @@ Env vars: `PORT` (7060), `HOST` (0.0.0.0), `DB_PATH` (./data/app.db),
 `VISITS_RETENTION_DAYS` (90 — see below), `FAKE_ENDPOINTS` (off — see below),
 `RATE_LIMIT_MAX` (300 — see below), `RATE_LIMIT_WINDOW_S` (10 — see below).
 
+### Tests
+
+```bash
+npm test   # node --test — zero-dep, no test framework installed
+```
+
+Unit tests for the UA parser, header-fingerprint scoring, decoys, the
+honeypot maze, and the Atom feed; a couple of DB-integration tests against a
+throwaway `node:sqlite` file (retention pruning, filters); and end-to-end
+tests that spawn the real server as a child process and hit it over HTTP —
+routing, the bots-only detail-page gate, the DNT/NOLOG skip-storage paths,
+and rate limiting, with a few assertions read straight from the SQLite file
+once the server's stopped (simpler than fighting `getStats()`'s 8s cache).
+
 ## Deploy with Docker
 
 On the VPS:
@@ -271,6 +287,7 @@ src/
   views.js       HTML rendering + the CSS (served via /style.css, dark theme)
   honeypot.js    bounded crawler-maze link generation
   indexnow.js    IndexNow ping (Bing + Yandex)
+test/            node:test — unit + DB + end-to-end HTTP tests (see Tests above)
 Dockerfile          node:24-alpine, runs as non-root
 docker-compose.yml  port 7060, named volume for the DB
 ```

@@ -200,7 +200,9 @@ const server = http.createServer((req, res) => {
   }
   const pathname = decodeURIComponent(url.pathname).replace(/\/{2,}/g, '/');
 
-  if (isRateLimited(ipHash(clientIp(req)))) {
+  // Never rate-limit health checks — Docker's own HEALTHCHECK (or any uptime
+  // monitor) polling frequently must never be able to lock itself out.
+  if (pathname !== '/healthz' && isRateLimited(ipHash(clientIp(req)))) {
     log(req, 429, pathname);
     return send(res, 429, 'too many requests\n', 'text/plain', {
       'retry-after': String(RATE_LIMIT_WINDOW_MS / 1000),
