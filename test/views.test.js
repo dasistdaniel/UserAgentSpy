@@ -49,6 +49,18 @@ describe('renderIndex', () => {
     }
   });
 
+  test('carries a canonical link and matching OpenGraph tags', () => {
+    const parsed = parseUA('curl/8.0');
+    const fp = analyzeRequest({ httpVersion: '1.1', headers: {} }, parsed);
+    const html = renderIndex({
+      ua: 'curl/8.0', parsed, fp, headers: {}, ipHashShown: null, trapLinks: [], dnt: false,
+    });
+    assert.match(html, /<link rel="canonical" href="https:\/\/useragents\.nichtregistriert\.de\/">/);
+    assert.match(html, /<meta property="og:url" content="https:\/\/useragents\.nichtregistriert\.de\/">/);
+    assert.match(html, /<meta property="og:title" content="[^"]+">/);
+    assert.match(html, /<meta property="og:description" content="[^"]+">/);
+  });
+
   test('shows the DNT/self-exclusion note instead of the storage explainer when dnt is true', () => {
     const parsed = parseUA('curl/8.0');
     const fp = analyzeRequest({ httpVersion: '1.1', headers: {} }, parsed);
@@ -141,6 +153,15 @@ describe('renderStats', () => {
     // pill still carries range=7d along with it.
     assert.match(html, /href="\/stats\?filter=humans&range=7d"/);
     assert.match(html, /href="\/api\/stats\?filter=bots&range=7d"/);
+  });
+
+  test('the canonical link stays the bare /stats regardless of filter/range', () => {
+    const s = minimalStats();
+    s.filter = 'bots';
+    s.range = '7d';
+    const html = renderStats(s);
+    assert.match(html, /<link rel="canonical" href="https:\/\/useragents\.nichtregistriert\.de\/stats">/);
+    assert.match(html, /<meta property="og:url" content="https:\/\/useragents\.nichtregistriert\.de\/stats">/);
   });
 });
 

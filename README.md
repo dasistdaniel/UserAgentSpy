@@ -39,6 +39,13 @@ Every request except `/api/stats`, `/healthz`, `/favicon.ico`, and requests send
 - After deploying, submit the domain to: Google Search Console, Bing Webmaster
   Tools, and a few "what's my user agent" / free-tools link directories. Backlinks
   are what actually bring the long tail of crawlers.
+- Every page carries a page-specific `<meta name="description">`, OpenGraph tags
+  (`og:title`/`og:description`/`og:url`/`og:site_name`) and a Twitter Card tag, so
+  a link shared on HN/Reddit/Slack/Mastodon renders as an actual preview card
+  instead of a bare URL.
+- Every page also carries `<link rel="canonical">` pointing at its bare path —
+  `/stats` always canonicalizes to plain `/stats` regardless of `?filter=`/`?range=`,
+  so those combinations aren't indexed as separate, duplicate pages.
 
 ### Decoy endpoints (`FAKE_ENDPOINTS`, off by default)
 

@@ -57,7 +57,11 @@ footer{margin-top:40px;color:#8b949e;font-size:12px}
 // since any CSS change produces a new URL, no stale-stylesheet risk.
 export const CSS_VERSION = crypto.createHash('sha256').update(CSS).digest('hex').slice(0, 10);
 
-function layout(title, body, { refresh = 0, description = '' } = {}) {
+function layout(title, body, { refresh = 0, description = '', canonicalPath = '' } = {}) {
+  // canonicalPath is always the bare resource path, never a query string — that's
+  // the point: /stats?filter=bots&range=7d and /stats both canonicalize to plain
+  // /stats, telling search engines they're the same page instead of duplicates.
+  const canonicalUrl = canonicalPath ? `https://${SITE}${canonicalPath}` : '';
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -65,9 +69,16 @@ function layout(title, body, { refresh = 0, description = '' } = {}) {
 <meta name="viewport" content="width=device-width,initial-scale=1">
 ${description ? `<meta name="description" content="${esc(description)}">` : ''}
 ${refresh ? `<meta http-equiv="refresh" content="${refresh}">` : ''}
+${canonicalUrl ? `<link rel="canonical" href="${canonicalUrl}">` : ''}
 <link rel="alternate" type="application/atom+xml" title="newest user-agents" href="/feed.xml">
 <link rel="stylesheet" href="/style.css?v=${CSS_VERSION}">
 <title>${esc(title)}</title>
+${canonicalUrl ? `<meta property="og:type" content="website">
+<meta property="og:site_name" content="${SITE}">
+<meta property="og:title" content="${esc(title)}">
+<meta property="og:url" content="${canonicalUrl}">
+<meta name="twitter:card" content="summary">` : ''}
+${description && canonicalUrl ? `<meta property="og:description" content="${esc(description)}">` : ''}
 </head>
 <body><main class="wrap">${body}</main></body>
 </html>`;
@@ -201,6 +212,7 @@ export function renderIndex({ ua, parsed, fp, headers, ipHashShown, trapLinks, d
     description:
       'See your own User-Agent, the browser/OS/device parsed from it, and a ' +
       'header-fingerprint check for whether your request matches the browser it claims.',
+    canonicalPath: '/',
   });
 }
 
@@ -463,6 +475,9 @@ ${
     description:
       'Live dashboard of who and what crawls this site: bot vs human traffic, top ' +
       'user-agents and bots, browsers, OSes, probed paths and response codes.',
+    // Always the bare path — ?filter=/?range= combinations canonicalize to plain
+    // /stats so they aren't indexed as separate, duplicate pages.
+    canonicalPath: '/stats',
   });
 }
 
@@ -592,6 +607,7 @@ export function renderUaDetail({ detail }) {
     description:
       `First/last seen, request history, header-fingerprint verdict and honeypot ` +
       `activity for the ${name} crawler on useragents.nichtregistriert.de.`,
+    canonicalPath: `/stats/ua/${m.ua_hash}`,
   });
 }
 
@@ -762,5 +778,6 @@ export function renderPrivacy({ retentionDays } = {}) {
     description:
       'What useragents.nichtregistriert.de collects, why, how long it is kept, ' +
       'what is published, and your rights under the GDPR.',
+    canonicalPath: '/datenschutz',
   });
 }
