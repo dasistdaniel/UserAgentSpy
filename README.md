@@ -169,7 +169,9 @@ visit will be flagged** — check `/` in a real browser after deploying.
 
 ## Run locally
 
-Requires **Node.js ≥ 22.5** (uses the built-in `node:sqlite` — no npm packages).
+Requires a recent **Node.js 22.x or 24.x** (uses the built-in `node:sqlite` — no
+npm packages). CI runs against both; `node:sqlite` isn't in every early 22.x
+patch, so if you hit `ERR_UNKNOWN_BUILTIN_MODULE`, update Node.
 
 ```bash
 PORT=7060 npm start   # http://localhost:7060

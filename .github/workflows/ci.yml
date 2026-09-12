@@ -14,10 +14,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 22.5.0 is the floor declared in package.json engines (needed for
-        # node:sqlite); 24 matches the node:24-alpine image this actually
-        # deploys with.
-        node-version: ['22.5.0', '24']
+        # Latest 22.x (the major-version floor node:sqlite needs) and 24
+        # (matches the node:24-alpine image this actually deploys with).
+        # NOT pinned to the exact patch 22.5.0: CI caught that build missing
+        # node:sqlite entirely (ERR_UNKNOWN_BUILTIN_MODULE) — it only landed
+        # in a later 22.x patch, so the engines field no longer claims .5.
+        node-version: ['22', '24']
     steps:
       - uses: actions/checkout@v4
 

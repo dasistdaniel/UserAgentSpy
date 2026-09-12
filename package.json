@@ -10,7 +10,7 @@
     "url": "https://github.com/dasistdaniel/useragents.spy.git"
   },
   "engines": {
-    "node": ">=22.5"
+    "node": ">=22"
   },
   "scripts": {
     "start": "node --disable-warning=ExperimentalWarning src/server.js",
