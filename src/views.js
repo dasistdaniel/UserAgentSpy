@@ -12,12 +12,14 @@ const CSS = `
 :root{color-scheme:dark}
 *{box-sizing:border-box}
 body{margin:0;background:#0b0e14;color:#c9d1d9;font:14px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-a{color:#58a6ff;text-decoration:none}
-a:hover{text-decoration:underline}
+a{color:#58a6ff;text-decoration:underline}
+a:hover{color:#79b8ff}
 .wrap{max-width:1080px;margin:0 auto;padding:32px 20px 64px}
 header h1{font-size:20px;margin:0 0 4px;letter-spacing:.5px}
 header p{margin:0;color:#8b949e}
 nav{margin:14px 0 28px;display:flex;gap:16px;flex-wrap:wrap}
+nav a,.filters a{text-decoration:none}
+nav a:hover,.filters a:hover{text-decoration:underline}
 .panel{background:#11161f;border:1px solid #21262d;border-radius:10px;padding:18px 20px;margin:16px 0}
 .panel h2{font-size:13px;text-transform:uppercase;letter-spacing:1px;color:#8b949e;margin:0 0 14px}
 .ua-string{font-size:15px;word-break:break-all;background:#0b0e14;border:1px solid #21262d;border-radius:8px;padding:14px;color:#e6edf3}
@@ -58,7 +60,7 @@ ${refresh ? `<meta http-equiv="refresh" content="${refresh}">` : ''}
 <title>${esc(title)}</title>
 <style>${CSS}</style>
 </head>
-<body><div class="wrap">${body}</div></body>
+<body><main class="wrap">${body}</main></body>
 </html>`;
 }
 
@@ -184,7 +186,7 @@ export function renderIndex({ ua, parsed, fp, headers, ipHashShown, trapLinks, d
 </footer>
 
 <div class="hp" aria-hidden="true">
-  ${trapLinks.map((h, i) => `<a href="${esc(h)}" rel="nofollow">catalogue entry ${i + 1}</a>`).join('')}
+  ${trapLinks.map((h, i) => `<a href="${esc(h)}" rel="nofollow" tabindex="-1">catalogue entry ${i + 1}</a>`).join('')}
 </div>`;
   return layout('useragents.nichtregistriert.de — your User-Agent, logged', body);
 }
