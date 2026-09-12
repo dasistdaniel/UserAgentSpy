@@ -4,7 +4,7 @@ A tiny website that captures the **User-Agent** of every visitor — human or bo
 shows it back to them, stores it, and builds live statistics about who (and what)
 crawls the web.
 
-Target deployment: `https://useragents.nichtregistriert.de` (Docker on a VPS).
+**Live at [useragents.nichtregistriert.de](https://useragents.nichtregistriert.de)** — open it, see your own User-Agent get parsed and fingerprinted, then check [`/stats`](https://useragents.nichtregistriert.de/stats) for what's actually been crawling it.
 
 ## What it does
 

@@ -4,6 +4,11 @@
   "description": "Captures, stores and visualises the User-Agent of every visitor (humans and bots).",
   "type": "module",
   "private": true,
+  "homepage": "https://useragents.nichtregistriert.de",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dasistdaniel/useragents.spy.git"
+  },
   "engines": {
     "node": ">=22.5"
   },
